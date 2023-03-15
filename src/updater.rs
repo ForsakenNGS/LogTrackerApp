@@ -6,7 +6,7 @@ use std::env::var;
 use std::fs::{self, File};
 use std::io::{Read, Write, Result};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct UpdaterConfig {
     game_dir: Box<str>,
     api_key: Box<str>,
@@ -20,11 +20,7 @@ pub struct Updater {
 impl Updater {
     pub fn new() -> Updater {
         Updater{
-            config: UpdaterConfig{
-                game_dir: "".into(),
-                api_key: "".into(),
-                api_secret: "".into()
-            }
+            config: Default::default()
         }
     }
 
@@ -41,17 +37,17 @@ impl Updater {
     }
 
     pub fn set_game_dir(&mut self, game_dir: &str) {
-        self.config.game_dir = game_dir.clone().into();
+        self.config.game_dir = game_dir.into();
         self.write_config();
     }
 
     pub fn set_api_key(&mut self, api_key: &str) {
-        self.config.api_key = api_key.clone().into();
+        self.config.api_key = api_key.into();
         self.write_config();
     }
 
     pub fn set_api_secret(&mut self, api_secret: &str) {
-        self.config.api_secret = api_secret.clone().into();
+        self.config.api_secret = api_secret.into();
         self.write_config();
     }
 
@@ -59,7 +55,7 @@ impl Updater {
         let config_home = var("XDG_CONFIG_HOME")
             .or_else(|_| var("HOME").map(|home| format!("{}/.logtrackerapp", home)))
             .unwrap();
-        let config_meta = r#fs::metadata(config_home.to_owned());
+        let config_meta = fs::metadata(config_home.to_owned());
         if config_meta.is_ok() && config_meta.unwrap().is_file() {
             let data = fs::read_to_string(config_home).unwrap();
             self.config = serde_json::from_str(data.as_str()).unwrap();
