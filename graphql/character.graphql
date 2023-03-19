@@ -1,0 +1,14 @@
+query CharacterView($name: String!, $server_slug: String!, $server_region: String!, $zone_id: Int!, $query_heal: Boolean!, $query_damage: Boolean!) {
+    characterData {
+        character(name: $name, serverSlug: $server_slug, serverRegion: $server_region) {
+            id
+            classID
+            level
+            name
+            zoneRankingsHeal25: zoneRankings(zoneID: $zone_id, size: 25, metric: hps) @include(if: $query_heal)
+            zoneRankingsHeal10: zoneRankings(zoneID: $zone_id, size: 10, metric: hps) @include(if: $query_heal)
+            zoneRankingsDmg25: zoneRankings(zoneID: $zone_id, size: 25, metric: dps) @include(if: $query_damage)
+            zoneRankingsDmg10: zoneRankings(zoneID: $zone_id, size: 10, metric: dps) @include(if: $query_damage)
+        }
+    }
+}
