@@ -1,14 +1,27 @@
-query CharacterView($name: String!, $server_slug: String!, $server_region: String!, $zone_id: Int!, $query_heal: Boolean!, $query_damage: Boolean!) {
+query CharacterView(
+    $name: String!, $server_slug: String!, $server_region: String!, $zone_id: Int!, 
+    $query_spec1: Boolean!, $query_spec1_name: String, $query_spec1_metric: CharacterRankingMetricType,
+    $query_spec2: Boolean!, $query_spec2_name: String, $query_spec2_metric: CharacterRankingMetricType,
+    $query_spec3: Boolean!, $query_spec3_name: String, $query_spec3_metric: CharacterRankingMetricType,
+    $query_spec4: Boolean!, $query_spec4_name: String, $query_spec4_metric: CharacterRankingMetricType,
+    $query_spec5: Boolean!, $query_spec5_name: String, $query_spec5_metric: CharacterRankingMetricType
+) {
     characterData {
         character(name: $name, serverSlug: $server_slug, serverRegion: $server_region) {
             id
             classID
             level
             name
-            zoneRankingsHeal25: zoneRankings(zoneID: $zone_id, size: 25, metric: hps) @include(if: $query_heal)
-            zoneRankingsHeal10: zoneRankings(zoneID: $zone_id, size: 10, metric: hps) @include(if: $query_heal)
-            zoneRankingsDmg25: zoneRankings(zoneID: $zone_id, size: 25, metric: dps) @include(if: $query_damage)
-            zoneRankingsDmg10: zoneRankings(zoneID: $zone_id, size: 10, metric: dps) @include(if: $query_damage)
+            zoneRankings25Spec1: zoneRankings(zoneID: $zone_id, specName: $query_spec1_name, size: 25, metric: $query_spec1_metric) @include(if: $query_spec1)
+            zoneRankings10Spec1: zoneRankings(zoneID: $zone_id, specName: $query_spec1_name, size: 10, metric: $query_spec1_metric) @include(if: $query_spec1)
+            zoneRankings25Spec2: zoneRankings(zoneID: $zone_id, specName: $query_spec2_name, size: 25, metric: $query_spec2_metric) @include(if: $query_spec2)
+            zoneRankings10Spec2: zoneRankings(zoneID: $zone_id, specName: $query_spec2_name, size: 10, metric: $query_spec2_metric) @include(if: $query_spec2)
+            zoneRankings25Spec3: zoneRankings(zoneID: $zone_id, specName: $query_spec3_name, size: 25, metric: $query_spec3_metric) @include(if: $query_spec3)
+            zoneRankings10Spec3: zoneRankings(zoneID: $zone_id, specName: $query_spec3_name, size: 10, metric: $query_spec3_metric) @include(if: $query_spec3)
+            zoneRankings25Spec4: zoneRankings(zoneID: $zone_id, specName: $query_spec4_name, size: 25, metric: $query_spec4_metric) @include(if: $query_spec4)
+            zoneRankings10Spec4: zoneRankings(zoneID: $zone_id, specName: $query_spec4_name, size: 10, metric: $query_spec4_metric) @include(if: $query_spec4)
+            zoneRankings25Spec5: zoneRankings(zoneID: $zone_id, specName: $query_spec5_name, size: 25, metric: $query_spec5_metric) @include(if: $query_spec5)
+            zoneRankings10Spec5: zoneRankings(zoneID: $zone_id, specName: $query_spec5_name, size: 10, metric: $query_spec5_metric) @include(if: $query_spec5)
         }
     }
 }

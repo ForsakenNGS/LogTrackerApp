@@ -61,45 +61,63 @@ pub struct UpdaterBaseDataClassSpec {
     id: i64,
     name: Box<str>,
     slug: Box<str>,
+    metric: Box<str>,
 }
 
 #[derive(Clone, Default)]
 pub struct UpdaterRanking {
     encounters: i64,
     encounters_killed: i64,
-    allstar_ratings: Vec<(i64,i64)>,
+    allstar_ratings: Vec<(i64,i64,i64)>,
     encounter_ratings: Vec<(i64,i64,i64)>
 }
 
 impl UpdaterRanking {
-    pub fn update_from_json(&mut self, data: serde_json::Value, class_id: i64, base_data: &UpdaterBaseData) {
-        // Clear values
+    pub fn clear(&mut self) {
         self.encounters = 0;
         self.encounters_killed = 0;
         self.allstar_ratings.clear();
         self.encounter_ratings.clear();
+    }
+    pub fn update_from_json(&mut self, data: &serde_json::Value, spec_id: i64) {
         // Fill with new data
-        let base_data_class = base_data.classes.get(&class_id.to_string()).unwrap();
-        let allstars = data.get("allStars").unwrap().as_array().unwrap();
-        for allstars_spec in allstars.iter() {
-            let spec_ident = allstars_spec.get("spec").unwrap().as_str().unwrap();
-            let spec_rating = allstars_spec.get("rankPercent").unwrap().as_f64().unwrap();
-            let base_data_spec = base_data_class.specs.get(&spec_ident.to_string()).unwrap();
-            self.allstar_ratings.push((base_data_spec.id, spec_rating.round() as i64));
+        if let Some(best) = data.get("bestPerformanceAverage") {
+            if !best.is_null() {
+                self.allstar_ratings.push((
+                    spec_id, 
+                    best.as_f64().unwrap().round() as i64,
+                    data.get("medianPerformanceAverage").unwrap().as_f64().unwrap().round() as i64
+                ));
+            }
         }
-        let encounters = data.get("rankings").unwrap().as_array().unwrap();
-        for encounter_rank in encounters.iter() {
-            self.encounters += 1;
-            let spec_raw = encounter_rank.get("spec").unwrap();
-            if !spec_raw.is_null() {
-                self.encounters_killed += 1;
-                let spec_ident = encounter_rank.get("spec").unwrap().as_str().unwrap();
-                let spec_rating = encounter_rank.get("rankPercent").unwrap().as_f64().unwrap();
-                let spec_median = encounter_rank.get("medianPercent").unwrap().as_f64().unwrap();
-                let base_data_spec = base_data_class.specs.get(&spec_ident.to_string()).unwrap();
-                self.encounter_ratings.push((base_data_spec.id, spec_rating.round() as i64, spec_median.round() as i64));
-            } else {
-                self.encounter_ratings.push((0,0,0));
+        if let Some(encounters) = data.get("rankings") {
+            if !encounters.is_null() {
+                let encounters = encounters.as_array().unwrap();
+                // Clear encounter stats
+                self.encounters = 0;
+                self.encounters_killed = 0;
+                let mut encounter_index = 0;
+                for encounter_rank in encounters.iter() {
+                    if self.encounter_ratings.len() <= encounter_index {
+                        self.encounter_ratings.push((0 as i64, 0 as i64, 0 as i64));
+                    }
+                    let encounter_rating = self.encounter_ratings.get_mut(encounter_index).unwrap();
+                    self.encounters += 1;
+                    let spec_raw = encounter_rank.get("spec").unwrap();
+                    if !spec_raw.is_null() {
+                        let best = encounter_rank.get("rankPercent").unwrap().as_f64().unwrap().round() as i64;
+                        let avg = encounter_rank.get("medianPercent").unwrap().as_f64().unwrap().round() as i64;
+                        if best > encounter_rating.1 {
+                            encounter_rating.0 = spec_id;
+                            encounter_rating.1 = best;
+                            encounter_rating.2 = avg;
+                        }
+                    }
+                    if encounter_rating.1 > 0 {
+                        self.encounters_killed += 1;
+                    }
+                    encounter_index += 1;
+                }
             }
         }
     }
@@ -113,7 +131,7 @@ impl UpdaterRanking {
         let data_allstars: Table = data.get(3).unwrap();
         for pair_allstar in data_allstars.pairs::<String, Table>() {
             let (_allstar_index, allstar_details) = pair_allstar.unwrap();
-            self.allstar_ratings.push((allstar_details.get(1).unwrap(), allstar_details.get(2).unwrap()));
+            self.allstar_ratings.push((allstar_details.get(1).unwrap(), allstar_details.get(2).unwrap(), allstar_details.get(3).unwrap_or_default()));
         }
         let data_encounters_str: String = data.get(4).unwrap();
         let data_encounters: Vec<&str> = data_encounters_str.split("|").collect();
@@ -288,6 +306,7 @@ impl Updater {
                         base_data_spec.id = spec_details.get("id").unwrap();
                         base_data_spec.name = spec_details.get("name").unwrap();
                         base_data_spec.slug = spec_details.get("slug").unwrap();
+                        base_data_spec.metric = spec_details.get("metric").unwrap();
                     }
                 }
             }
@@ -348,34 +367,18 @@ impl Updater {
                     let mut zones: Vec<String> = Vec::new();
                     for (zone_ident, ranking) in player.ranking.iter() {
                         let mut allstars: Vec<String> = Vec::new();
-                        for (spec_id, score) in ranking.allstar_ratings.iter() {
-                            let mut allstar_str = String::from("{");
-                            allstar_str.push_str(&spec_id.to_string());
-                            allstar_str.push_str(",");
-                            allstar_str.push_str(&score.to_string());
-                            allstar_str.push_str("}");
+                        for (spec_id, best, median) in ranking.allstar_ratings.iter() {
+                            let allstar_str = format!("{{{},{},{}}}", spec_id, best, median);
                             allstars.push(allstar_str);
                         }
                         let mut encounters: Vec<String> = Vec::new();
                         for (spec_id, best, median) in ranking.encounter_ratings.iter() {
-                            let mut encounter_str = String::from(&spec_id.to_string());
-                            encounter_str.push_str(",");
-                            encounter_str.push_str(&best.to_string());
-                            encounter_str.push_str(",");
-                            encounter_str.push_str(&median.to_string());
+                            let encounter_str = format!("{},{},{}", spec_id, best, median);
                             encounters.push(encounter_str);
                         }
-                        let mut zone_str = String::from("[\"");
-                        zone_str.push_str(zone_ident);
-                        zone_str.push_str("\"] = {");
-                        zone_str.push_str(&ranking.encounters.to_string());
-                        zone_str.push_str(",");
-                        zone_str.push_str(&ranking.encounters_killed.to_string());
-                        zone_str.push_str(",{");
-                        zone_str.push_str(&allstars.join(","));
-                        zone_str.push_str("},\"");
-                        zone_str.push_str(&encounters.join("|"));
-                        zone_str.push_str("\"}");
+                        let zone_str = format!("[\"{}\"] = {{{},{},{{{}}},\"{}\"}}",
+                            zone_ident, ranking.encounters, ranking.encounters_killed, allstars.join(","), encounters.join("|")
+                        );
                         zones.push(zone_str);
                     }
                     data_player.push(format!("{{ {} }}", zones.join(",")));
@@ -493,36 +496,39 @@ impl Updater {
         let player = self.update_queue.get(update_index).unwrap();
         let zone_id = 1017;
         let character = self.query_character(
-            player.name.to_string(), player.realm.to_string(), "EU".to_string(), zone_id, false
+            player.name.to_string(), player.realm.to_string(), "EU".to_string(), zone_id, player.class
         );
         let player = self.update_queue.get_mut(update_index).unwrap();
         if let Some(data) = character {
             if let Some(data_char) = data.character_data.unwrap().character {
                 if data_char.class_id > 0 {
                     player.class = data_char.class_id;
-                    if let Some(data_json) = data_char.zone_rankings_dmg25 {
-                        let mut ranking_id = zone_id.to_string();
-                        ranking_id.push_str("-25");
+                    let base_data_class = self.base_data.classes.get(&player.class.to_string()).unwrap();
+                    for zone_size in vec![10, 25] {
+                        let ranking_id = format!("{}-{}", zone_id, zone_size);
                         let ranking = player.ranking.entry(ranking_id).or_default();
-                        ranking.update_from_json(data_json, player.class, &self.base_data);
-                    }
-                    if let Some(data_json) = data_char.zone_rankings_heal25 {
-                        let mut ranking_id = zone_id.to_string();
-                        ranking_id.push_str("-25");
-                        let ranking = player.ranking.entry(ranking_id).or_default();
-                        ranking.update_from_json(data_json, player.class, &self.base_data);
-                    }
-                    if let Some(data_json) = data_char.zone_rankings_dmg10 {
-                        let mut ranking_id = zone_id.to_string();
-                        ranking_id.push_str("-10");
-                        let ranking = player.ranking.entry(ranking_id).or_default();
-                        ranking.update_from_json(data_json, player.class, &self.base_data);                
-                    }
-                    if let Some(data_json) = data_char.zone_rankings_heal10 {
-                        let mut ranking_id = zone_id.to_string();
-                        ranking_id.push_str("-10");
-                        let ranking = player.ranking.entry(ranking_id).or_default();
-                        ranking.update_from_json(data_json, player.class, &self.base_data);
+                        ranking.clear();
+                        for spec_index in 1..=5 {
+                            if let Some(spec_details) = base_data_class.specs.get(&spec_index.to_string()) {
+                                let data_json_opt = match (zone_size as i64, spec_index) {
+                                    (25, 1) => data_char.zone_rankings25_spec1.as_ref(),
+                                    (25, 2) => data_char.zone_rankings25_spec2.as_ref(),
+                                    (25, 3) => data_char.zone_rankings25_spec3.as_ref(),
+                                    (25, 4) => data_char.zone_rankings25_spec4.as_ref(),
+                                    (25, 5) => data_char.zone_rankings25_spec5.as_ref(),
+                                    (10, 1) => data_char.zone_rankings10_spec1.as_ref(),
+                                    (10, 2) => data_char.zone_rankings10_spec2.as_ref(),
+                                    (10, 3) => data_char.zone_rankings10_spec3.as_ref(),
+                                    (10, 4) => data_char.zone_rankings10_spec4.as_ref(),
+                                    (10, 5) => data_char.zone_rankings10_spec5.as_ref(),
+                                    _ => None
+                                };
+                                if let Some(data_json) = data_json_opt {
+                                    ranking.update_from_json(data_json, spec_details.id);
+                                }
+                            }
+                        }
+                        
                     }
                     player.last_update = i64::try_from(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()).unwrap();
                     player.last_update_logs = player.last_update;
@@ -569,11 +575,57 @@ impl Updater {
         self.wcl_token.clone()
     }
 
-    pub fn query_character(&self, name: String, server_slug: String, server_region: String, zone_id: i64, query_heal: bool) -> Option<character_view::ResponseData> {
-        let vars = character_view::Variables {
+    pub fn query_character_metric(&self, spec: &UpdaterBaseDataClassSpec) -> Option<character_view::CharacterRankingMetricType> {
+        let metric_str: &str = &spec.metric.clone();
+        match metric_str {
+            "hps" => Some(character_view::CharacterRankingMetricType::hps),
+            _ => Some(character_view::CharacterRankingMetricType::dps)
+        }
+    }
+
+    pub fn query_character(&self, name: String, server_slug: String, server_region: String, zone_id: i64, class_id: i64) -> Option<character_view::ResponseData> {
+        let mut vars = character_view::Variables {
             name: name, server_slug: server_slug, server_region: server_region, 
-            zone_id: zone_id, query_damage: true, query_heal: query_heal
+            zone_id: zone_id,
+            query_spec1: false, query_spec1_name: None, query_spec1_metric: None,
+            query_spec2: false, query_spec2_name: None, query_spec2_metric: None,
+            query_spec3: false, query_spec3_name: None, query_spec3_metric: None,
+            query_spec4: false, query_spec4_name: None, query_spec4_metric: None,
+            query_spec5: false, query_spec5_name: None, query_spec5_metric: None
         };
+        let base_data_class = self.base_data.classes.get(&class_id.to_string()).unwrap();
+        for spec_index in 1..=5 {
+            if let Some(spec_details) = base_data_class.specs.get(&spec_index.to_string()) {
+                match spec_index {
+                    1 => {
+                        vars.query_spec1 = true;
+                        vars.query_spec1_name = Some(spec_details.slug.to_string());
+                        vars.query_spec1_metric = self.query_character_metric(spec_details);
+                    },
+                    2 => {
+                        vars.query_spec2 = true;
+                        vars.query_spec2_name = Some(spec_details.slug.to_string());
+                        vars.query_spec2_metric = self.query_character_metric(spec_details);
+                    },
+                    3 => {
+                        vars.query_spec3 = true;
+                        vars.query_spec3_name = Some(spec_details.slug.to_string());
+                        vars.query_spec3_metric = self.query_character_metric(spec_details);
+                    },
+                    4 => {
+                        vars.query_spec4 = true;
+                        vars.query_spec4_name = Some(spec_details.slug.to_string());
+                        vars.query_spec4_metric = self.query_character_metric(spec_details);
+                    },
+                    5 => {
+                        vars.query_spec5 = true;
+                        vars.query_spec5_name = Some(spec_details.slug.to_string());
+                        vars.query_spec5_metric = self.query_character_metric(spec_details);
+                    }
+                    _ => {}
+                }
+            }
+        }
         let client = Client::builder()
             .user_agent("graphql-rust/0.10.0")
             .default_headers(
