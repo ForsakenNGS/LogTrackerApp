@@ -2,7 +2,7 @@ mod updater;
 
 use gtk::{prelude::*, MessageDialog, Window, DialogFlags, MessageType, ButtonsType, glib};
 use gtk::{Application, ApplicationWindow, Builder, FileChooserButton, Entry, Statusbar};
-use std::time::SystemTime;
+use std::time::{SystemTime, Duration};
 use updater::Updater;
 use std::sync::{Arc, Mutex};
 use std::path::Path;
@@ -77,13 +77,17 @@ fn build_gui(application: &Application) {
     let _bg_thread = thread::spawn(move || {
         let mut last_status_update = SystemTime::now();
         let mut last_export = SystemTime::now();
+        let mut pause_until = SystemTime::now();
         loop {
             if !updater_thread.lock().unwrap().is_active() {
                 updater_thread.lock().unwrap().write_addon_data();
                 break;
             }
+            if pause_until > SystemTime::now() {
+                continue;
+            }
             updater_thread.lock().unwrap().update_addon();
-            let (update_pos, update_max) = updater_thread.lock().unwrap().update_next();
+            let (update_pos, update_max, pause) = updater_thread.lock().unwrap().update_next();
             let last_status_update_secs = SystemTime::now().duration_since(last_status_update).unwrap().as_secs();
             if last_status_update_secs > 2 {
                 let status_text = format!("Updated {} / {}", update_pos, update_max);
@@ -94,6 +98,9 @@ fn build_gui(application: &Application) {
             if last_export_secs > 30 {
                 updater_thread.lock().unwrap().write_addon_data();
                 last_export = SystemTime::now();
+            }
+            if pause {
+                pause_until = SystemTime::now() + Duration::new(300, 0);
             }
         }
     });

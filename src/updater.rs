@@ -484,12 +484,12 @@ impl Updater {
         }
     }
 
-    pub fn update_next(&mut self) -> (usize,usize) {
+    pub fn update_next(&mut self) -> (usize,usize,bool) {
         let update_index = self.update_queue_pos;
         let update_count = self.update_queue.len();
         if (update_index >= update_count) || self.config.api_key.is_empty() || self.config.api_secret.is_empty() {
             sleep(Duration::new(1, 0));
-            return (update_index, update_count);
+            return (update_index, update_count, false);
         }
         self.auth();
         self.update_queue_pos += 1;
@@ -549,10 +549,10 @@ impl Updater {
                 info!(
                     "Failed to obtain rate limit, assuming limit is reached! Pausing for 5 minutes..."
                 );
-                sleep(Duration::new(300, 0));
+                return (update_index+1, update_count, true);
             }
         }
-        return (update_index+1, update_count);
+        return (update_index+1, update_count, false);
     }
 
     fn auth(&mut self) -> String {
