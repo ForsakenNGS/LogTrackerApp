@@ -593,55 +593,58 @@ impl Updater {
             query_spec4: false, query_spec4_name: None, query_spec4_metric: None,
             query_spec5: false, query_spec5_name: None, query_spec5_metric: None
         };
-        let base_data_class = self.base_data.classes.get(&class_id.to_string()).unwrap();
-        for spec_index in 1..=5 {
-            if let Some(spec_details) = base_data_class.specs.get(&spec_index.to_string()) {
-                match spec_index {
-                    1 => {
-                        vars.query_spec1 = true;
-                        vars.query_spec1_name = Some(spec_details.slug.to_string());
-                        vars.query_spec1_metric = self.query_character_metric(spec_details);
-                    },
-                    2 => {
-                        vars.query_spec2 = true;
-                        vars.query_spec2_name = Some(spec_details.slug.to_string());
-                        vars.query_spec2_metric = self.query_character_metric(spec_details);
-                    },
-                    3 => {
-                        vars.query_spec3 = true;
-                        vars.query_spec3_name = Some(spec_details.slug.to_string());
-                        vars.query_spec3_metric = self.query_character_metric(spec_details);
-                    },
-                    4 => {
-                        vars.query_spec4 = true;
-                        vars.query_spec4_name = Some(spec_details.slug.to_string());
-                        vars.query_spec4_metric = self.query_character_metric(spec_details);
-                    },
-                    5 => {
-                        vars.query_spec5 = true;
-                        vars.query_spec5_name = Some(spec_details.slug.to_string());
-                        vars.query_spec5_metric = self.query_character_metric(spec_details);
+        if let Some(base_data_class) = self.base_data.classes.get(&class_id.to_string()) {
+            for spec_index in 1..=5 {
+                if let Some(spec_details) = base_data_class.specs.get(&spec_index.to_string()) {
+                    match spec_index {
+                        1 => {
+                            vars.query_spec1 = true;
+                            vars.query_spec1_name = Some(spec_details.slug.to_string());
+                            vars.query_spec1_metric = self.query_character_metric(spec_details);
+                        },
+                        2 => {
+                            vars.query_spec2 = true;
+                            vars.query_spec2_name = Some(spec_details.slug.to_string());
+                            vars.query_spec2_metric = self.query_character_metric(spec_details);
+                        },
+                        3 => {
+                            vars.query_spec3 = true;
+                            vars.query_spec3_name = Some(spec_details.slug.to_string());
+                            vars.query_spec3_metric = self.query_character_metric(spec_details);
+                        },
+                        4 => {
+                            vars.query_spec4 = true;
+                            vars.query_spec4_name = Some(spec_details.slug.to_string());
+                            vars.query_spec4_metric = self.query_character_metric(spec_details);
+                        },
+                        5 => {
+                            vars.query_spec5 = true;
+                            vars.query_spec5_name = Some(spec_details.slug.to_string());
+                            vars.query_spec5_metric = self.query_character_metric(spec_details);
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
+            let client = Client::builder()
+                .user_agent("graphql-rust/0.10.0")
+                .default_headers(
+                    std::iter::once((
+                        reqwest::header::AUTHORIZATION,
+                        reqwest::header::HeaderValue::from_str(self.wcl_token.as_str().clone()).unwrap()
+                    ))
+                    .collect()
+                )
+                .build().unwrap();
+            let response_body = post_graphql::<CharacterView, _>(&client, "https://classic.warcraftlogs.com/api/v2/client", vars);
+            if let Err(e) = response_body {
+                warn!("Application error: {e}");
+                return None;
+            }
+            response_body.unwrap().data
+        } else {
+            None
         }
-        let client = Client::builder()
-            .user_agent("graphql-rust/0.10.0")
-            .default_headers(
-                std::iter::once((
-                    reqwest::header::AUTHORIZATION,
-                    reqwest::header::HeaderValue::from_str(self.wcl_token.as_str().clone()).unwrap()
-                ))
-                .collect()
-            )
-            .build().unwrap();
-        let response_body = post_graphql::<CharacterView, _>(&client, "https://classic.warcraftlogs.com/api/v2/client", vars);
-        if let Err(e) = response_body {
-            warn!("Application error: {e}");
-            return None;
-        }
-        response_body.unwrap().data
     }
 
     pub fn query_rate_limit(&self) -> Option<rate_limit_view::ResponseData> {
