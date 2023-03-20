@@ -204,7 +204,7 @@ impl Updater {
     }
 
     pub fn is_update_possible(&self) -> bool {
-        !(self.update_queue_pos >= self.update_queue.len()) || self.config.api_id.is_empty() || self.config.api_secret.is_empty()
+        (self.update_queue_pos < self.update_queue.len()) && !self.config.api_id.is_empty() && !self.config.api_secret.is_empty()
     }
 
     pub fn get_game_dir(&self) -> &str {
