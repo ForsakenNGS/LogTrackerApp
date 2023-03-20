@@ -204,7 +204,7 @@ impl Updater {
     }
 
     pub fn is_update_possible(&self) -> bool {
-        (self.update_queue_pos >= self.update_queue.len()) || self.config.api_id.is_empty() || self.config.api_secret.is_empty()
+        !(self.update_queue_pos >= self.update_queue.len()) || self.config.api_id.is_empty() || self.config.api_secret.is_empty()
     }
 
     pub fn get_game_dir(&self) -> &str {
@@ -496,7 +496,7 @@ impl Updater {
     }
 
     pub fn update_next(&mut self) -> (usize,usize,bool) {
-        if self.is_update_possible() {
+        if !self.is_update_possible() {
             sleep(Duration::new(1, 0));
             return (self.update_queue_pos, self.update_queue.len(), false);
         }
