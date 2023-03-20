@@ -47,6 +47,7 @@ impl LogTrackerApp {
                     updater_thread.lock().unwrap().write_addon_data();
                     break;
                 }
+                updater_thread.lock().unwrap().update_addon();
                 if !updater_thread.lock().unwrap().is_update_possible() {
                     thread::sleep(Duration::new(1, 0));
                     continue;
@@ -59,7 +60,6 @@ impl LogTrackerApp {
                     thread::sleep(Duration::new(5, 0));
                     continue;
                 }
-                updater_thread.lock().unwrap().update_addon();
                 let (update_pos, update_max, pause) = updater_thread.lock().unwrap().update_next();
                 let last_status_update_secs = SystemTime::now().duration_since(last_status_update).unwrap().as_secs();
                 if last_status_update_secs > 2 {
