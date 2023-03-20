@@ -3,6 +3,8 @@ mod updater;
 use eframe::egui;
 use tinyfiledialogs::MessageBoxIcon;
 use std::time::{SystemTime, Duration};
+use chrono::offset::Local;
+use chrono::DateTime;
 use updater::Updater;
 use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
@@ -25,7 +27,7 @@ impl LogTrackerApp {
         updater.read_addon_data();
         Self{
             game_dir: updater.get_game_dir().to_owned(),
-            api_id: updater.get_api_key().to_owned(),
+            api_id: updater.get_api_id().to_owned(),
             api_secret: updater.get_api_secret().to_owned(),
             status_text: Arc::new(Mutex::new("".to_owned())),
             updater_arc: Arc::new(Mutex::new(updater)),
@@ -46,13 +48,19 @@ impl LogTrackerApp {
                     break;
                 }
                 if pause_until > SystemTime::now() {
+                    thread::sleep(Duration::new(1, 0));
+                    let (_points_used, _points_limit, points_reset) = updater_thread.lock().unwrap().get_api_limit();
+                    let points_reset_dt: DateTime<Local> = points_reset.into();
+                    let status_text = format!("Rate limit reached! Reset at {}", points_reset_dt.format("%T"));
+                    *status_text_thread.lock().unwrap() = status_text;
                     continue;
                 }
                 updater_thread.lock().unwrap().update_addon();
                 let (update_pos, update_max, pause) = updater_thread.lock().unwrap().update_next();
                 let last_status_update_secs = SystemTime::now().duration_since(last_status_update).unwrap().as_secs();
                 if last_status_update_secs > 2 {
-                    let status_text = format!("Updated {} / {}", update_pos, update_max);
+                    let (points_used, points_limit, _points_reset) = updater_thread.lock().unwrap().get_api_limit();
+                    let status_text = format!("Updated {} / {} ({} / {} points used)", update_pos, update_max, points_used.round(), points_limit.round());
                     *status_text_thread.lock().unwrap() = status_text;
                     last_status_update = SystemTime::now();
                 }
@@ -112,7 +120,7 @@ impl eframe::App for LogTrackerApp {
                 ).labelled_by(label_api_id.id);
                 if input_api_id.changed() {
                     let mut updater = self.updater_arc.lock().unwrap();
-                    updater.set_api_key(&self.api_id);
+                    updater.set_api_id(&self.api_id);
                 }
                 let label_api_secret = ui.label("WCL API Client-Secret");
                 let input_api_secret = ui.add(

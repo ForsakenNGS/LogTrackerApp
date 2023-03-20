@@ -1,7 +1,6 @@
 extern crate serde;
 extern crate serde_json;
 
-use std::env::var;
 use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::Write;
@@ -24,7 +23,7 @@ const UPDATE_INTERVAL_SLOW: i64 = 604800;
 #[derive(Serialize, Deserialize, Default)]
 pub struct UpdaterConfig {
     game_dir: Box<str>,
-    api_key: Box<str>,
+    api_id: Box<str>,
     api_secret: Box<str>
 }
 
@@ -173,7 +172,10 @@ pub struct Updater {
     update_addon: SystemTime,
     update_queue: Vec<UpdaterPlayer>,
     update_queue_pos: usize,
-    wcl_token: String
+    wcl_token: String,
+    wcl_points_left: f64,
+    wcl_points_limit: f64,
+    wcl_reset_at: SystemTime
 }
 
 impl Updater {
@@ -186,7 +188,10 @@ impl Updater {
             update_addon: SystemTime::UNIX_EPOCH,
             update_queue: Vec::new(),
             update_queue_pos: 0,
-            wcl_token: Default::default()
+            wcl_token: Default::default(),
+            wcl_points_left: Default::default(),
+            wcl_points_limit: Default::default(),
+            wcl_reset_at: SystemTime::now()
         }
     }
 
@@ -202,12 +207,16 @@ impl Updater {
         &self.config.game_dir
     }
 
-    pub fn get_api_key(&self) -> &str {
-        &self.config.api_key
+    pub fn get_api_id(&self) -> &str {
+        &self.config.api_id
     }
 
     pub fn get_api_secret(&self) -> &str {
         &self.config.api_secret
+    }
+
+    pub fn get_api_limit(&self) -> (f64, f64, SystemTime) {
+        (self.wcl_points_left, self.wcl_points_limit, self.wcl_reset_at)
     }
 
     pub fn get_player(&mut self, realm: &String, player_name: &String) -> &mut UpdaterPlayer {
@@ -228,8 +237,8 @@ impl Updater {
         self.read_addon_data();
     }
 
-    pub fn set_api_key(&mut self, api_key: &str) {
-        self.config.api_key = api_key.into();
+    pub fn set_api_id(&mut self, api_id: &str) {
+        self.config.api_id = api_id.into();
         self.write_config();
     }
 
@@ -436,21 +445,19 @@ impl Updater {
     }
 
     pub fn load_config(&mut self) {
-        let config_home = var("XDG_CONFIG_HOME")
-            .or_else(|_| var("HOME").map(|home| format!("{}/.logtrackerapp", home)))
-            .unwrap();
-        let config_meta = fs::metadata(config_home.to_owned());
+        let mut config_path = home::home_dir().unwrap();
+        config_path.push(".logtrackerapp");
+        let config_meta = fs::metadata(config_path.to_owned());
         if config_meta.is_ok() && config_meta.unwrap().is_file() {
-            let data = fs::read_to_string(config_home).unwrap();
+            let data = fs::read_to_string(config_path).unwrap();
             self.config = serde_json::from_str(data.as_str()).unwrap();
         }
     }
 
     pub fn write_config(&self) {
-        let config_home = var("XDG_CONFIG_HOME")
-            .or_else(|_| var("HOME").map(|home| format!("{}/.logtrackerapp", home)))
-            .unwrap();
-        let mut file = File::create(config_home).unwrap();
+        let mut config_path = home::home_dir().unwrap();
+        config_path.push(".logtrackerapp");
+        let mut file = File::create(config_path).unwrap();
         let data = serde_json::to_string(&self.config);
         file.write_all(data.unwrap().as_bytes())
             .expect("Failed to write configuration");
@@ -487,7 +494,7 @@ impl Updater {
     pub fn update_next(&mut self) -> (usize,usize,bool) {
         let update_index = self.update_queue_pos;
         let update_count = self.update_queue.len();
-        if (update_index >= update_count) || self.config.api_key.is_empty() || self.config.api_secret.is_empty() {
+        if (update_index >= update_count) || self.config.api_id.is_empty() || self.config.api_secret.is_empty() {
             sleep(Duration::new(1, 0));
             return (update_index, update_count, false);
         }
@@ -545,6 +552,9 @@ impl Updater {
                     "Rate limit info: {} / {} points spent, reset in {}", 
                     rate_limit_data.limit_per_hour, rate_limit_data.points_spent_this_hour, rate_limit_data.points_reset_in
                 );
+                self.wcl_points_limit = rate_limit_data.limit_per_hour as f64;
+                self.wcl_points_left = self.wcl_points_limit - rate_limit_data.points_spent_this_hour;
+                self.wcl_reset_at = SystemTime::now() + Duration::new(u64::try_from(rate_limit_data.points_reset_in).unwrap_or_default(), 0);
             } else {
                 info!(
                     "Failed to obtain rate limit, assuming limit is reached! Pausing for 5 minutes..."
@@ -560,7 +570,7 @@ impl Updater {
             return self.wcl_token.clone();
         }
         let client = BasicClient::new(
-            ClientId::new(self.config.api_key.to_string()),
+            ClientId::new(self.config.api_id.to_string()),
             Some(ClientSecret::new(self.config.api_secret.to_string())),
             AuthUrl::new("https://www.warcraftlogs.com/oauth/authorize".to_string()).unwrap(),
             Some(TokenUrl::new("https://www.warcraftlogs.com/oauth/token".to_string()).unwrap()),
