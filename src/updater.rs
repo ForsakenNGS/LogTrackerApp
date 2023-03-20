@@ -203,6 +203,10 @@ impl Updater {
         self.active
     }
 
+    pub fn is_update_possible(&self) -> bool {
+        (self.update_queue_pos >= self.update_queue.len()) || self.config.api_id.is_empty() || self.config.api_secret.is_empty()
+    }
+
     pub fn get_game_dir(&self) -> &str {
         &self.config.game_dir
     }
@@ -492,12 +496,12 @@ impl Updater {
     }
 
     pub fn update_next(&mut self) -> (usize,usize,bool) {
+        if self.is_update_possible() {
+            sleep(Duration::new(1, 0));
+            return (self.update_queue_pos, self.update_queue.len(), false);
+        }
         let update_index = self.update_queue_pos;
         let update_count = self.update_queue.len();
-        if (update_index >= update_count) || self.config.api_id.is_empty() || self.config.api_secret.is_empty() {
-            sleep(Duration::new(1, 0));
-            return (update_index, update_count, false);
-        }
         self.auth();
         self.update_queue_pos += 1;
         let player = self.update_queue.get(update_index).unwrap();

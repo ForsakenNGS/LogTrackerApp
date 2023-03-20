@@ -43,16 +43,20 @@ impl LogTrackerApp {
             let mut last_export = SystemTime::now();
             let mut pause_until = SystemTime::now();
             loop {
+                if !updater_thread.lock().unwrap().is_update_possible() {
+                    thread::sleep(Duration::new(1, 0));
+                    continue;
+                }
                 if !updater_thread.lock().unwrap().is_active() {
                     updater_thread.lock().unwrap().write_addon_data();
                     break;
                 }
                 if pause_until > SystemTime::now() {
-                    thread::sleep(Duration::new(1, 0));
                     let (_points_used, _points_limit, points_reset) = updater_thread.lock().unwrap().get_api_limit();
                     let points_reset_dt: DateTime<Local> = points_reset.into();
                     let status_text = format!("Rate limit reached! Reset at {}", points_reset_dt.format("%T"));
                     *status_text_thread.lock().unwrap() = status_text;
+                    thread::sleep(Duration::new(5, 0));
                     continue;
                 }
                 updater_thread.lock().unwrap().update_addon();
