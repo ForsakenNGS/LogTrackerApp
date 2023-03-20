@@ -67,6 +67,7 @@ impl LogTrackerApp {
                     let status_text = format!("Updated {} / {} ({} / {} points used)", update_pos, update_max, points_used.round(), points_limit.round());
                     *status_text_thread.lock().unwrap() = status_text;
                     last_status_update = SystemTime::now();
+                    thread::sleep(Duration::new(0, 10000));
                 }
                 let last_export_secs = SystemTime::now().duration_since(last_export).unwrap().as_secs();
                 if last_export_secs > 30 {
