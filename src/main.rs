@@ -43,13 +43,13 @@ impl LogTrackerApp {
             let mut last_export = SystemTime::now();
             let mut pause_until = SystemTime::now();
             loop {
-                if !updater_thread.lock().unwrap().is_update_possible() {
-                    thread::sleep(Duration::new(1, 0));
-                    continue;
-                }
                 if !updater_thread.lock().unwrap().is_active() {
                     updater_thread.lock().unwrap().write_addon_data();
                     break;
+                }
+                if !updater_thread.lock().unwrap().is_update_possible() {
+                    thread::sleep(Duration::new(1, 0));
+                    continue;
                 }
                 if pause_until > SystemTime::now() {
                     let (_points_used, _points_limit, points_reset) = updater_thread.lock().unwrap().get_api_limit();
