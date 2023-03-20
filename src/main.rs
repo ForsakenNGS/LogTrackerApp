@@ -107,6 +107,7 @@ impl eframe::App for LogTrackerApp {
                             if game_dir_wtf.is_dir() {
                                 let mut updater = self.updater_arc.lock().unwrap();
                                 updater.set_game_dir(&path);
+                                self.game_dir = path;
                             } else {
                                 tinyfiledialogs::message_box_ok("Error", "Invalid game directory!", MessageBoxIcon::Error);
                             }

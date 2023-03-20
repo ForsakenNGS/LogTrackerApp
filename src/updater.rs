@@ -173,7 +173,7 @@ pub struct Updater {
     update_queue: Vec<UpdaterPlayer>,
     update_queue_pos: usize,
     wcl_token: String,
-    wcl_points_left: f64,
+    wcl_points_used: f64,
     wcl_points_limit: f64,
     wcl_reset_at: SystemTime
 }
@@ -189,7 +189,7 @@ impl Updater {
             update_queue: Vec::new(),
             update_queue_pos: 0,
             wcl_token: Default::default(),
-            wcl_points_left: Default::default(),
+            wcl_points_used: Default::default(),
             wcl_points_limit: Default::default(),
             wcl_reset_at: SystemTime::now()
         }
@@ -216,7 +216,7 @@ impl Updater {
     }
 
     pub fn get_api_limit(&self) -> (f64, f64, SystemTime) {
-        (self.wcl_points_left, self.wcl_points_limit, self.wcl_reset_at)
+        (self.wcl_points_used, self.wcl_points_limit, self.wcl_reset_at)
     }
 
     pub fn get_player(&mut self, realm: &String, player_name: &String) -> &mut UpdaterPlayer {
@@ -553,7 +553,7 @@ impl Updater {
                     rate_limit_data.limit_per_hour, rate_limit_data.points_spent_this_hour, rate_limit_data.points_reset_in
                 );
                 self.wcl_points_limit = rate_limit_data.limit_per_hour as f64;
-                self.wcl_points_left = self.wcl_points_limit - rate_limit_data.points_spent_this_hour;
+                self.wcl_points_used = rate_limit_data.points_spent_this_hour;
                 self.wcl_reset_at = SystemTime::now() + Duration::new(u64::try_from(rate_limit_data.points_reset_in).unwrap_or_default(), 0);
             } else {
                 info!(
