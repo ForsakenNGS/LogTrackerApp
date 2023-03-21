@@ -4,9 +4,12 @@ extern crate serde_json;
 use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::Write;
+use std::sync::{Mutex, Arc};
 use std::time::{Duration, SystemTime};
 use std::thread::sleep;
 use std::collections::HashMap;
+use chrono::offset::Local;
+use chrono::DateTime;
 use eframe::egui;
 use log::{info, warn};
 use mlua::prelude::*;
@@ -26,6 +29,18 @@ pub struct UpdaterConfig {
     game_dir: Box<str>,
     api_id: Box<str>,
     api_secret: Box<str>
+}
+
+#[derive(Clone, Default)]
+pub struct UpdaterGuiData {
+    pub ctx: Option<egui::Context>,
+    pub game_dir: String,
+    pub api_id: String,
+    pub api_secret: String,
+    pub manual_realm: String,
+    pub manual_player: String,
+    pub manual_result: String,
+    pub status_text: String
 }
 
 #[derive(Clone, Default)]
@@ -168,7 +183,7 @@ pub struct RateLimitView;
 pub struct Updater {
     active: bool,
     config: UpdaterConfig,
-    egui_context: Option<egui::Context>,
+    gui_data_arc: Option<Arc<Mutex<UpdaterGuiData>>>,
     base_data: UpdaterBaseData,
     players: HashMap<String, HashMap<String, UpdaterPlayer>>,
     update_addon: SystemTime,
@@ -185,7 +200,7 @@ impl Updater {
         Updater{
             active: true,
             config: Default::default(),
-            egui_context: None,
+            gui_data_arc: None,
             base_data: Default::default(),
             players: HashMap::new(),
             update_addon: SystemTime::UNIX_EPOCH,
@@ -210,22 +225,6 @@ impl Updater {
         (self.update_queue_pos < self.update_queue.len()) && !self.config.api_id.is_empty() && !self.config.api_secret.is_empty()
     }
 
-    pub fn get_game_dir(&self) -> &str {
-        &self.config.game_dir
-    }
-
-    pub fn get_api_id(&self) -> &str {
-        &self.config.api_id
-    }
-
-    pub fn get_api_secret(&self) -> &str {
-        &self.config.api_secret
-    }
-
-    pub fn get_api_limit(&self) -> (f64, f64, SystemTime) {
-        (self.wcl_points_used, self.wcl_points_limit, self.wcl_reset_at)
-    }
-
     pub fn get_player(&mut self, realm: &String, player_name: &String) -> &mut UpdaterPlayer {
         let realm_players = self.players.entry(realm.clone()).or_insert_with(|| HashMap::new());
         realm_players.entry(player_name.clone()).or_insert_with(|| {
@@ -238,10 +237,20 @@ impl Updater {
         })
     }
 
-    pub fn set_egui_context(&mut self, ctx: &egui::Context, replace: bool) {
-        if self.egui_context.is_none() || replace {
-            self.egui_context = Some(ctx.clone());
+    fn modify_gui_data(&self, force: bool, callback: impl FnOnce(&mut UpdaterGuiData)) {
+        if let Some(gui_data_arc) = &self.gui_data_arc {
+            if force {
+                callback(&mut gui_data_arc.lock().unwrap());
+            } else {
+                if let Ok(gui_data_locked) = &mut gui_data_arc.try_lock() {
+                    callback(gui_data_locked);
+                }
+            }
         }
+    }
+
+    pub fn set_gui_data(&mut self, gui_data_arc: Arc<Mutex<UpdaterGuiData>>) {
+        self.gui_data_arc = Some(gui_data_arc);
     }
 
     pub fn set_game_dir(&mut self, game_dir: &str) {
@@ -261,6 +270,7 @@ impl Updater {
     }
 
     pub fn read_addon_data(&mut self) {
+        let mut realm_first: Option<String> = None;
         let game_dir_str = String::from(self.config.game_dir.clone());
         let game_dir = PathBuf::from(game_dir_str);
         let mut game_wtf_accounts = PathBuf::from(game_dir.clone());
@@ -287,6 +297,9 @@ impl Updater {
                         let data_realms: Table = data.get("playerData").unwrap();
                         for pair_realm in data_realms.pairs::<String, Table>() {
                             let (realm_name, player_list) = pair_realm.unwrap();
+                            if realm_first.is_none() {
+                                realm_first = Some(realm_name.clone());
+                            }
                             for pair_player in player_list.pairs::<String, Table>() {
                                 let (player_name, player_details) = pair_player.unwrap();
                                 let player_updated: i64 = player_details.get("lastUpdate").unwrap();
@@ -345,6 +358,9 @@ impl Updater {
                 let data: Table = lua.globals().get("LogTracker_AppData").unwrap();
                 for pair_realm in data.pairs::<String, Table>() {
                     let (realm_name, player_list) = pair_realm.unwrap();
+                    if realm_first.is_none() {
+                        realm_first = Some(realm_name.clone());
+                    }
                     for pair_player in player_list.pairs::<String, Table>() {
                         let (player_name, player_details) = pair_player.unwrap();
                         let import_last_update: i64 = player_details.get(4).unwrap();
@@ -367,6 +383,14 @@ impl Updater {
                 // TODO: Load previously exported entries
             }
         }
+        self.modify_gui_data(true, |gui_data| {
+            if let Some(realm_name) = realm_first {
+                let gui_manual_realm = &mut gui_data.manual_realm;
+                if gui_manual_realm.is_empty() {
+                    *gui_manual_realm = realm_name.clone();
+                }
+            }
+        });
         self.rewrite_update_queue();
     }
 
@@ -380,7 +404,7 @@ impl Updater {
             realm_str.push_str("\"] = {\n");
             let mut players: Vec<String> = Vec::new();
             for (name, player) in player_list.iter() {
-                if player.last_update_addon < player.last_update {
+                if player.last_update_addon >= player.last_update {
                     let mut data_player: Vec<String> = Vec::new();
                     data_player.push(player.level.to_string());
                     data_player.push(format!("\"{}\"", player.faction));
@@ -464,6 +488,12 @@ impl Updater {
         if config_meta.is_ok() && config_meta.unwrap().is_file() {
             let data = fs::read_to_string(config_path).unwrap();
             self.config = serde_json::from_str(data.as_str()).unwrap();
+            if let Some(gui_data_arc) = &self.gui_data_arc {
+                let gui_data = &mut gui_data_arc.lock().unwrap();
+                gui_data.game_dir = self.config.game_dir.to_string();
+                gui_data.api_id = self.config.api_id.to_string();
+                gui_data.api_secret = self.config.api_secret.to_string();
+            }
         }
     }
 
@@ -477,9 +507,11 @@ impl Updater {
     }
 
     pub fn update_gui(&self) {
-        if let Some(ctx) = &self.egui_context {
-            ctx.request_repaint();
-        }
+        self.modify_gui_data(false, |gui_data| {
+            if let Some(ctx) = &gui_data.ctx {
+                ctx.request_repaint();
+            }
+        });
     }
 
     pub fn update_addon(&mut self) {
@@ -510,21 +542,43 @@ impl Updater {
         }
     }
 
-    pub fn update_next(&mut self) -> (usize,usize,bool) {
+    pub fn update_next(&mut self) -> bool {
         if !self.is_update_possible() {
             sleep(Duration::new(1, 0));
-            return (self.update_queue_pos, self.update_queue.len(), false);
+            return false;
         }
         let update_index = self.update_queue_pos;
         let update_count = self.update_queue.len();
         self.auth();
         self.update_queue_pos += 1;
         let player = self.update_queue.get(update_index).unwrap();
+        if self.update_player(player.clone()) {
+            self.modify_gui_data(false, |gui_data| {
+                let status_text = format!("Updated {} / {} ({} / {} points used)",
+                    self.update_queue_pos, update_count, self.wcl_points_used.round(), self.wcl_points_limit.round()
+                );
+                info!("Status: {}", status_text);
+                gui_data.status_text = status_text;
+            });
+            self.update_gui();
+            return true;
+        } else {
+            self.modify_gui_data(false, |gui_data| {
+                let points_reset_dt: DateTime<Local> = self.wcl_reset_at.into();
+                let status_text = format!("Rate limit reached! Reset at {}", points_reset_dt.format("%R"));
+                info!("Status: {}", status_text);
+                gui_data.status_text = status_text;
+            });
+            self.update_gui();
+            return false;
+        }
+    }
+
+    pub fn update_player(&mut self, mut player: UpdaterPlayer) -> bool {
         let zone_id = 1017;
         let (character, character_query) = self.query_character(
             player.name.to_string(), player.realm.to_string(), "EU".to_string(), zone_id, player.class
         );
-        let player = self.update_queue.get_mut(update_index).unwrap();
         if let Some(data) = character {
             if let Some(data_char) = data.character_data.unwrap().character {
                 if data_char.class_id > 0 {
@@ -570,13 +624,13 @@ impl Updater {
             player.last_update_logs = player.last_update;
             // Write into player list
             let realm_players = self.players.entry(player.realm.to_string()).or_insert_with(|| HashMap::new());
-            realm_players.insert(player.name.to_string(), player.clone());
+            realm_players.insert(player.name.to_string(), player);
         } else {
             if !self.update_api_limit() {
-                return (update_index, update_count, true);
+                return false;
             }
         }
-        return (update_index+1, update_count, false);
+        true
     }
 
     pub fn update_api_limit(&mut self) -> bool {
