@@ -52,32 +52,37 @@ impl LogTrackerApp {
                 }
                 updater_thread.lock().unwrap().update_addon();
                 if !updater_thread.lock().unwrap().is_update_possible() {
+                    {
+                        let status_text = format!("Update completed.");
+                        *status_text_thread.lock().unwrap() = status_text;
+                        updater_thread.lock().unwrap().update_gui();
+                    }
                     thread::sleep(Duration::new(1, 0));
-                    let updater = updater_thread.lock().unwrap();
-                    let status_text = format!("Update completed.");
-                    *status_text_thread.lock().unwrap() = status_text;
-                    updater.update_gui();
                     continue;
                 }
                 if pause_until > SystemTime::now() {
-                    let updater = updater_thread.lock().unwrap();
-                    let (_points_used, _points_limit, points_reset) = updater.get_api_limit();
-                    let points_reset_dt: DateTime<Local> = points_reset.into();
-                    let status_text = format!("Rate limit reached! Reset at {}", points_reset_dt.format("%R"));
-                    *status_text_thread.lock().unwrap() = status_text;
-                    updater.update_gui();
+                    {
+                        let updater = updater_thread.lock().unwrap();
+                        let (_points_used, _points_limit, points_reset) = updater.get_api_limit();
+                        let points_reset_dt: DateTime<Local> = points_reset.into();
+                        let status_text = format!("Rate limit reached! Reset at {}", points_reset_dt.format("%R"));
+                        *status_text_thread.lock().unwrap() = status_text;
+                        updater.update_gui();
+                    }
                     thread::sleep(Duration::new(5, 0));
                     continue;
                 }
                 let (update_pos, update_max, pause) = updater_thread.lock().unwrap().update_next();
                 let last_status_update_secs = SystemTime::now().duration_since(last_status_update).unwrap().as_secs();
                 if last_status_update_secs > 2 {
-                    let updater = updater_thread.lock().unwrap();
-                    let (points_used, points_limit, _points_reset) = updater.get_api_limit();
-                    let status_text = format!("Updated {} / {} ({} / {} points used)", update_pos, update_max, points_used.round(), points_limit.round());
-                    *status_text_thread.lock().unwrap() = status_text;
-                    updater.update_gui();
-                    last_status_update = SystemTime::now();
+                    {
+                        let updater = updater_thread.lock().unwrap();
+                        let (points_used, points_limit, _points_reset) = updater.get_api_limit();
+                        let status_text = format!("Updated {} / {} ({} / {} points used)", update_pos, update_max, points_used.round(), points_limit.round());
+                        *status_text_thread.lock().unwrap() = status_text;
+                        updater.update_gui();
+                        last_status_update = SystemTime::now();
+                    }
                     thread::sleep(Duration::new(0, 10000));
                 }
                 let last_rate_update_secs = SystemTime::now().duration_since(last_rate_update).unwrap().as_secs();
