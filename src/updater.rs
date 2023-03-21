@@ -7,6 +7,7 @@ use std::io::Write;
 use std::time::{Duration, SystemTime};
 use std::thread::sleep;
 use std::collections::HashMap;
+use eframe::egui;
 use log::{info, warn};
 use mlua::prelude::*;
 use mlua::Table;
@@ -167,6 +168,7 @@ pub struct RateLimitView;
 pub struct Updater {
     active: bool,
     config: UpdaterConfig,
+    egui_context: Option<egui::Context>,
     base_data: UpdaterBaseData,
     players: HashMap<String, HashMap<String, UpdaterPlayer>>,
     update_addon: SystemTime,
@@ -183,6 +185,7 @@ impl Updater {
         Updater{
             active: true,
             config: Default::default(),
+            egui_context: None,
             base_data: Default::default(),
             players: HashMap::new(),
             update_addon: SystemTime::UNIX_EPOCH,
@@ -233,6 +236,12 @@ impl Updater {
                 last_update: 0, last_update_logs: 0, last_update_addon: 0
             }
         })
+    }
+
+    pub fn set_egui_context(&mut self, ctx: &egui::Context, replace: bool) {
+        if self.egui_context.is_none() || replace {
+            self.egui_context = Some(ctx.clone());
+        }
     }
 
     pub fn set_game_dir(&mut self, game_dir: &str) {
@@ -467,6 +476,12 @@ impl Updater {
             .expect("Failed to write configuration");
     }
 
+    pub fn update_gui(&self) {
+        if let Some(ctx) = &self.egui_context {
+            ctx.request_repaint();
+        }
+    }
+
     pub fn update_addon(&mut self) {
         let game_dir_str = String::from(self.config.game_dir.clone());
         let game_dir = PathBuf::from(game_dir_str);
@@ -506,7 +521,7 @@ impl Updater {
         self.update_queue_pos += 1;
         let player = self.update_queue.get(update_index).unwrap();
         let zone_id = 1017;
-        let character = self.query_character(
+        let (character, character_query) = self.query_character(
             player.name.to_string(), player.realm.to_string(), "EU".to_string(), zone_id, player.class
         );
         let player = self.update_queue.get_mut(update_index).unwrap();
@@ -514,6 +529,7 @@ impl Updater {
             if let Some(data_char) = data.character_data.unwrap().character {
                 if data_char.class_id > 0 {
                     player.class = data_char.class_id;
+                    let mut spec_failed = false;
                     let base_data_class = self.base_data.classes.get(&player.class.to_string()).unwrap();
                     for zone_size in vec![10, 25] {
                         let ranking_id = format!("{}-{}", zone_id, zone_size);
@@ -536,37 +552,48 @@ impl Updater {
                                 };
                                 if let Some(data_json) = data_json_opt {
                                     ranking.update_from_json(data_json, spec_details.id);
+                                } else {
+                                    spec_failed = true;
                                 }
                             }
-                        }
-                        
+                        }                        
                     }
-                    player.last_update = i64::try_from(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()).unwrap();
-                    player.last_update_logs = player.last_update;
-                    // Write into player list
-                    let realm_players = self.players.entry(player.realm.to_string()).or_insert_with(|| HashMap::new());
-                    realm_players.insert(player.name.to_string(), player.clone());
+                    // Output debug if some spec failed
+                    if spec_failed {
+                        if let Some(character_json) = character_query {
+                            info!("No result for query: {}", character_json);
+                        }
+                    }
                 }
             }
+            player.last_update = i64::try_from(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()).unwrap();
+            player.last_update_logs = player.last_update;
+            // Write into player list
+            let realm_players = self.players.entry(player.realm.to_string()).or_insert_with(|| HashMap::new());
+            realm_players.insert(player.name.to_string(), player.clone());
         } else {
-            let rate_limit = self.query_rate_limit();
-            if let Some(rate_limit_response) = rate_limit {
-                let rate_limit_data = rate_limit_response.rate_limit_data.unwrap();
-                info!(
-                    "Rate limit info: {} / {} points spent, reset in {}", 
-                    rate_limit_data.limit_per_hour, rate_limit_data.points_spent_this_hour, rate_limit_data.points_reset_in
-                );
-                self.wcl_points_limit = rate_limit_data.limit_per_hour as f64;
-                self.wcl_points_used = rate_limit_data.points_spent_this_hour;
-                self.wcl_reset_at = SystemTime::now() + Duration::new(u64::try_from(rate_limit_data.points_reset_in).unwrap_or_default(), 0);
-            } else {
-                info!(
-                    "Failed to obtain rate limit, assuming limit is reached! Pausing for 5 minutes..."
-                );
-                return (update_index+1, update_count, true);
+            if !self.update_api_limit() {
+                return (update_index, update_count, true);
             }
         }
         return (update_index+1, update_count, false);
+    }
+
+    pub fn update_api_limit(&mut self) -> bool {
+        let rate_limit = self.query_rate_limit();
+        if let Some(rate_limit_response) = rate_limit {
+            let rate_limit_data = rate_limit_response.rate_limit_data.unwrap();
+            info!(
+                "Rate limit info: {} / {} points spent, reset in {}", 
+                rate_limit_data.limit_per_hour, rate_limit_data.points_spent_this_hour, rate_limit_data.points_reset_in
+            );
+            self.wcl_points_limit = rate_limit_data.limit_per_hour as f64;
+            self.wcl_points_used = rate_limit_data.points_spent_this_hour;
+            self.wcl_reset_at = SystemTime::now() + Duration::new(u64::try_from(rate_limit_data.points_reset_in).unwrap_or_default() + 60, 0);
+            true
+        } else {
+            false
+        }
     }
 
     fn auth(&mut self) -> String {
@@ -597,7 +624,9 @@ impl Updater {
         }
     }
 
-    pub fn query_character(&self, name: String, server_slug: String, server_region: String, zone_id: i64, class_id: i64) -> Option<character_view::ResponseData> {
+    pub fn query_character(&self, name: String, server_slug: String, server_region: String, zone_id: i64, class_id: i64) 
+        -> (Option<character_view::ResponseData>, Option<String>)
+    {
         let mut vars = character_view::Variables {
             name: name, server_slug: server_slug, server_region: server_region, 
             zone_id: zone_id,
@@ -650,14 +679,15 @@ impl Updater {
                     .collect()
                 )
                 .build().unwrap();
+            let vars_string = serde_json::to_string_pretty(&vars).unwrap();
             let response_body = post_graphql::<CharacterView, _>(&client, "https://classic.warcraftlogs.com/api/v2/client", vars);
             if let Err(e) = response_body {
                 warn!("Application error: {e}");
-                return None;
+                return (None, Some(vars_string));
             }
-            response_body.unwrap().data
+            (response_body.unwrap().data, Some(vars_string))
         } else {
-            None
+            (None, None)
         }
     }
 

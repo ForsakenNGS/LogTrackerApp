@@ -42,6 +42,7 @@ impl LogTrackerApp {
         let status_text_thread  = self.status_text.clone();
         self.updater_thread = Some(thread::spawn(move || {
             let mut last_status_update = SystemTime::now();
+            let mut last_rate_update = SystemTime::now();
             let mut last_export = SystemTime::now();
             let mut pause_until = SystemTime::now();
             loop {
@@ -52,24 +53,37 @@ impl LogTrackerApp {
                 updater_thread.lock().unwrap().update_addon();
                 if !updater_thread.lock().unwrap().is_update_possible() {
                     thread::sleep(Duration::new(1, 0));
+                    let updater = updater_thread.lock().unwrap();
+                    let status_text = format!("Update completed.");
+                    *status_text_thread.lock().unwrap() = status_text;
+                    updater.update_gui();
                     continue;
                 }
                 if pause_until > SystemTime::now() {
-                    let (_points_used, _points_limit, points_reset) = updater_thread.lock().unwrap().get_api_limit();
+                    let updater = updater_thread.lock().unwrap();
+                    let (_points_used, _points_limit, points_reset) = updater.get_api_limit();
                     let points_reset_dt: DateTime<Local> = points_reset.into();
-                    let status_text = format!("Rate limit reached! Reset at {}", points_reset_dt.format("%T"));
+                    let status_text = format!("Rate limit reached! Reset at {}", points_reset_dt.format("%R"));
                     *status_text_thread.lock().unwrap() = status_text;
+                    updater.update_gui();
                     thread::sleep(Duration::new(5, 0));
                     continue;
                 }
                 let (update_pos, update_max, pause) = updater_thread.lock().unwrap().update_next();
                 let last_status_update_secs = SystemTime::now().duration_since(last_status_update).unwrap().as_secs();
                 if last_status_update_secs > 2 {
-                    let (points_used, points_limit, _points_reset) = updater_thread.lock().unwrap().get_api_limit();
+                    let updater = updater_thread.lock().unwrap();
+                    let (points_used, points_limit, _points_reset) = updater.get_api_limit();
                     let status_text = format!("Updated {} / {} ({} / {} points used)", update_pos, update_max, points_used.round(), points_limit.round());
                     *status_text_thread.lock().unwrap() = status_text;
+                    updater.update_gui();
                     last_status_update = SystemTime::now();
                     thread::sleep(Duration::new(0, 10000));
+                }
+                let last_rate_update_secs = SystemTime::now().duration_since(last_rate_update).unwrap().as_secs();
+                if last_rate_update_secs > 30 {
+                    updater_thread.lock().unwrap().update_api_limit();
+                    last_rate_update = SystemTime::now();
                 }
                 let last_export_secs = SystemTime::now().duration_since(last_export).unwrap().as_secs();
                 if last_export_secs > 30 {
@@ -77,7 +91,7 @@ impl LogTrackerApp {
                     last_export = SystemTime::now();
                 }
                 if pause {
-                    pause_until = SystemTime::now() + Duration::new(300, 0);
+                    pause_until = SystemTime::now() + Duration::new(60, 0);
                 }
             }
         }));
@@ -97,6 +111,7 @@ impl eframe::App for LogTrackerApp {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
+            self.updater_arc.lock().unwrap().set_egui_context(ctx, false);
             ui.set_min_width(300.0);
             ui.set_min_height(200.0);
             ui.vertical(|ui| {
