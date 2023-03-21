@@ -404,7 +404,7 @@ impl Updater {
             realm_str.push_str("\"] = {\n");
             let mut players: Vec<String> = Vec::new();
             for (name, player) in player_list.iter() {
-                if player.last_update_addon >= player.last_update {
+                if player.last_update_addon < player.last_update {
                     let mut data_player: Vec<String> = Vec::new();
                     data_player.push(player.level.to_string());
                     data_player.push(format!("\"{}\"", player.faction));
@@ -549,7 +549,6 @@ impl Updater {
         }
         let update_index = self.update_queue_pos;
         let update_count = self.update_queue.len();
-        self.auth();
         self.update_queue_pos += 1;
         let player = self.update_queue.get(update_index).unwrap();
         if self.update_player(player.clone()) {
@@ -575,6 +574,7 @@ impl Updater {
     }
 
     pub fn update_player(&mut self, mut player: UpdaterPlayer) -> bool {
+        self.auth();
         let zone_id = 1017;
         let (character, character_query) = self.query_character(
             player.name.to_string(), player.realm.to_string(), "EU".to_string(), zone_id, player.class
@@ -634,6 +634,7 @@ impl Updater {
     }
 
     pub fn update_api_limit(&mut self) -> bool {
+        self.auth();
         let rate_limit = self.query_rate_limit();
         if let Some(rate_limit_response) = rate_limit {
             let rate_limit_data = rate_limit_response.rate_limit_data.unwrap();

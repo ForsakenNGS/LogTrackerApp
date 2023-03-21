@@ -2,6 +2,7 @@
 
 mod updater;
 
+use image;
 use eframe::egui;
 use tinyfiledialogs::MessageBoxIcon;
 use std::time::{SystemTime, Duration};
@@ -9,6 +10,8 @@ use updater::{Updater, UpdaterGuiData};
 use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
 use std::thread::{self, JoinHandle};
+
+const ICON: &[u8] = include_bytes!("../LogTracker.png");
 
 struct LogTrackerApp {
     gui_data: Arc<Mutex<UpdaterGuiData>>,
@@ -59,7 +62,7 @@ impl LogTrackerApp {
                     continue;
                 }
                 if pause_until > SystemTime::now() {
-                    thread::sleep(Duration::new(5, 0));
+                    thread::sleep(Duration::new(1, 0));
                     continue;
                 }
                 let last_rate_update_secs = SystemTime::now().duration_since(last_rate_update).unwrap().as_secs();
@@ -167,6 +170,7 @@ impl eframe::App for LogTrackerApp {
                                 let success = updater.update_player(player);
                                 if success {
                                     gui_data.manual_result = format!("Successfully updated {}-{}", gui_data.manual_player, gui_data.manual_realm);
+                                    updater.write_addon_data();
                                 } else {
                                     gui_data.manual_result = format!("Failed to update {}-{}", gui_data.manual_player, gui_data.manual_realm);
                                 }
@@ -190,13 +194,21 @@ impl eframe::App for LogTrackerApp {
 fn main() -> Result<(), eframe::Error> {
     env_logger::init();
     // Initialize GUI
+    let version = option_env!("CARGO_PKG_VERSION").unwrap_or("?.?.?");
+    let icon = image::load_from_memory(ICON).unwrap().to_rgba8();
+    let (icon_width, icon_height) = icon.dimensions();
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(400.0, 300.0)),
         min_window_size: Some(egui::vec2(350.0, 300.0)),
+        icon_data: Some(eframe::IconData {
+            rgba: icon.into_raw(),
+            width: icon_width,
+            height: icon_height
+        }),
         ..Default::default()
     };
     eframe::run_native(
-        "LogTracker App", options,
+        format!("LogTracker App v{}", version).as_str(), options,
         Box::new(|cc| {
             let mut app = LogTrackerApp::new(cc);
             app.start_update_thread();
