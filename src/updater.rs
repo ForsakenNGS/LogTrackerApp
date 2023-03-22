@@ -564,7 +564,10 @@ impl Updater {
         } else {
             self.modify_gui_data(false, |gui_data| {
                 let points_reset_dt: DateTime<Local> = self.wcl_reset_at.into();
-                let status_text = format!("Rate limit reached! Reset at {}", points_reset_dt.format("%R"));
+                let status_text = match self.wcl_points_limit {
+                    x if x == 0.0 => format!("Rate limit reached! Reset time is unknown"),
+                    _ => format!("Rate limit reached! Reset at {}", points_reset_dt.format("%R"))
+                };
                 info!("Status: {}", status_text);
                 gui_data.status_text = status_text;
             });
@@ -605,6 +608,15 @@ impl Updater {
                                     _ => None
                                 };
                                 if let Some(data_json) = data_json_opt {
+                                    // Debug
+                                    /*
+                                    let mut config_path = home::home_dir().unwrap();
+                                    config_path.push("LogTrackerDebug");
+                                    config_path.push(format!("{}-{}-spec{}.json", player.name, player.realm, spec_index));
+                                    let mut file = File::create(config_path).unwrap();
+                                    file.write_all(serde_json::to_string_pretty(data_json).unwrap().as_bytes()).unwrap();
+                                    */
+                                    // ----------------
                                     ranking.update_from_json(data_json, spec_details.id);
                                 } else {
                                     spec_failed = true;
@@ -614,12 +626,21 @@ impl Updater {
                     }
                     // Output debug if some spec failed
                     if spec_failed {
-                        if let Some(character_json) = character_query {
+                        if let Some(character_json) = &character_query {
                             info!("No result for query: {}", character_json);
                         }
                     }
                 }
             }
+            // Debug
+            /*
+            let mut config_path = home::home_dir().unwrap();
+            config_path.push("LogTrackerDebug");
+            config_path.push(format!("{}-{}-query.json", player.name, player.realm));
+            let mut file = File::create(config_path).unwrap();
+            file.write_all(character_query.unwrap().as_bytes()).unwrap();
+            */
+            // ----------------
             player.last_update = i64::try_from(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()).unwrap();
             player.last_update_logs = player.last_update;
             // Write into player list
