@@ -66,7 +66,7 @@ impl LogTrackerApp {
                     continue;
                 }
                 let last_rate_update_secs = SystemTime::now().duration_since(last_rate_update).unwrap().as_secs();
-                if last_rate_update_secs > 30 {
+                if last_rate_update_secs > 15 {
                     updater_thread.lock().unwrap().update_api_limit();
                     last_rate_update = SystemTime::now();
                 }
@@ -199,7 +199,7 @@ fn main() -> Result<(), eframe::Error> {
     let (icon_width, icon_height) = icon.dimensions();
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(400.0, 300.0)),
-        min_window_size: Some(egui::vec2(350.0, 300.0)),
+        min_window_size: Some(egui::vec2(400.0, 300.0)),
         icon_data: Some(eframe::IconData {
             rgba: icon.into_raw(),
             width: icon_width,

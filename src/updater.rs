@@ -53,7 +53,8 @@ pub struct UpdaterPlayer {
     ranking: HashMap<String, UpdaterRanking>,
     last_update: i64,
     last_update_logs: i64,
-    last_update_addon: i64
+    last_update_addon: i64,
+    update_priority: i64
 }
 
 
@@ -232,7 +233,8 @@ impl Updater {
                 realm: realm.as_str().into(), name: player_name.as_str().into(),
                 faction: "Unknown".into(), class: 0, level: 0,
                 ranking: Default::default(),
-                last_update: 0, last_update_logs: 0, last_update_addon: 0
+                last_update: 0, last_update_logs: 0, last_update_addon: 0,
+                update_priority: 0
             }
         })
     }
@@ -465,18 +467,28 @@ impl Updater {
                 let (_player_name, player_details) = pair_player;
                 let last_seen = now - player_details.last_update;
                 let last_updated = now - player_details.last_update_logs;
-                if (last_seen < UPDATE_INTERVAL_FAST) && (last_updated > UPDATE_INTERVAL_FAST) {
-                    self.update_queue.push(player_details.clone());
+                if player_details.last_update_logs == 0 {
+                    let mut queue_player = player_details.clone();
+                    queue_player.update_priority = 3;
+                    self.update_queue.push(queue_player);
+                } else if (last_seen < UPDATE_INTERVAL_FAST) && (last_updated > UPDATE_INTERVAL_FAST) {
+                    let mut queue_player = player_details.clone();
+                    queue_player.update_priority = 2;
+                    self.update_queue.push(queue_player);
                 } else if last_updated > UPDATE_INTERVAL_SLOW {
-                    self.update_queue.push(player_details.clone());
+                    let mut queue_player = player_details.clone();
+                    queue_player.update_priority = 1;
+                    self.update_queue.push(queue_player);
                 }
             }
         }
         self.update_queue.sort_by(|a, b| {
-            if a.last_update_logs == b.last_update_logs {
-                b.last_update.cmp(&a.last_update)
-            } else {
+            if a.update_priority != b.update_priority {
+                b.update_priority.cmp(&a.update_priority)
+            } else if a.last_update_logs != b.last_update_logs {
                 a.last_update_logs.cmp(&b.last_update_logs)
+            } else {
+                b.last_update.cmp(&a.last_update)
             }
         });
     }
@@ -549,6 +561,22 @@ impl Updater {
         }
         let update_index = self.update_queue_pos;
         let update_count = self.update_queue.len();
+        if self.wcl_points_limit > 0.0 {
+            let wcl_points_left = self.wcl_points_limit - self.wcl_points_used;
+            let wcl_reserve_time = self.wcl_reset_at - Duration::new(300, 0);
+            if (wcl_points_left < 600.0) && (SystemTime::now() < wcl_reserve_time) {
+                self.modify_gui_data(false, |gui_data| {
+                    let points_reserve_dt: DateTime<Local> = wcl_reserve_time.into();
+                    let points_reset_dt: DateTime<Local> = self.wcl_reset_at.into();
+                    let status_text = format!("Updated {} / {} - Reserving {} points until {} (Reset at {})",
+                        self.update_queue_pos, update_count, wcl_points_left.round(), points_reserve_dt.format("%R"), points_reset_dt.format("%R")
+                    );
+                    info!("Status: {}", status_text);
+                    gui_data.status_text = status_text;
+                });
+                return false;
+            }
+        }
         self.update_queue_pos += 1;
         let player = self.update_queue.get(update_index).unwrap();
         if self.update_player(player.clone()) {
@@ -660,8 +688,8 @@ impl Updater {
         if let Some(rate_limit_response) = rate_limit {
             let rate_limit_data = rate_limit_response.rate_limit_data.unwrap();
             info!(
-                "Rate limit info: {} / {} points spent, reset in {}", 
-                rate_limit_data.limit_per_hour, rate_limit_data.points_spent_this_hour, rate_limit_data.points_reset_in
+                "Rate limit info: {} / {} points spent, reset in {} seconds", 
+                rate_limit_data.points_spent_this_hour, rate_limit_data.limit_per_hour, rate_limit_data.points_reset_in
             );
             self.wcl_points_limit = rate_limit_data.limit_per_hour as f64;
             self.wcl_points_used = rate_limit_data.points_spent_this_hour;
