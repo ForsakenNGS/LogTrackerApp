@@ -154,12 +154,14 @@ impl UpdaterRanking {
         let data_encounters: Vec<&str> = data_encounters_str.split("|").collect();
         for data_encounter in data_encounters.iter() {
             let data_encounter = data_encounter.to_string();
-            let data_ratings: Vec<&str> = data_encounter.split(",").collect();
-            self.encounter_ratings.push((
-                data_ratings.get(0).unwrap().parse::<i64>().or_else(|_| Ok::<i64, i64>(0)).unwrap(),
-                data_ratings.get(1).unwrap().parse::<i64>().or_else(|_| Ok::<i64, i64>(0)).unwrap(),
-                data_ratings.get(2).unwrap().parse::<i64>().or_else(|_| Ok::<i64, i64>(0)).unwrap()
-            ));
+            if !data_encounter.is_empty() {
+                let data_ratings: Vec<&str> = data_encounter.split(",").collect();
+                self.encounter_ratings.push((
+                    data_ratings.get(0).unwrap().parse::<i64>().or_else(|_| Ok::<i64, i64>(0)).unwrap(),
+                    data_ratings.get(1).unwrap().parse::<i64>().or_else(|_| Ok::<i64, i64>(0)).unwrap(),
+                    data_ratings.get(2).unwrap().parse::<i64>().or_else(|_| Ok::<i64, i64>(0)).unwrap()
+                ));
+            }
         }
     }
 }
