@@ -60,7 +60,8 @@ pub struct UpdaterPlayer {
 
 #[derive(Clone, Default)]
 pub struct UpdaterBaseData {
-    classes: HashMap<String, UpdaterBaseDataClass>
+    classes: HashMap<String, UpdaterBaseDataClass>,
+    region_by_server_slug: HashMap<String, String>
 }
 
 
@@ -346,6 +347,11 @@ impl Updater {
                         base_data_spec.metric = spec_details.get("metric").unwrap();
                     }
                 }
+                let data_region_by_server_slug: Table = data.get("regionByServerSlug").unwrap();
+                for pair_region_by_server_slug in data_region_by_server_slug.pairs::<String, String>() {
+                    let (server_slug, server_region) = pair_region_by_server_slug.unwrap();
+                    self.base_data.region_by_server_slug.insert(server_slug, server_region);
+                }
             }
         }
         let mut addon_lua_import = PathBuf::from(game_dir);
@@ -606,9 +612,13 @@ impl Updater {
 
     pub fn update_player(&mut self, mut player: UpdaterPlayer) -> bool {
         self.auth();
+        let region = self.base_data.region_by_server_slug.get(&player.realm.to_lowercase().to_string());
+        if region.is_none() {
+            return false;
+        }
         let zone_id = 1017;
         let (character, character_query) = self.query_character(
-            player.name.to_string(), player.realm.to_string(), "EU".to_string(), zone_id, player.class
+            player.name.to_string(), player.realm.to_string(), region.unwrap().to_string(), zone_id, player.class
         );
         if let Some(data) = character {
             if let Some(data_char) = data.character_data.unwrap().character {
@@ -678,6 +688,13 @@ impl Updater {
             if !self.update_api_limit() {
                 return false;
             }
+            // Request successful, but no logs available
+            player.last_update = i64::try_from(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()).unwrap();
+            player.last_update_logs = player.last_update;
+            // Write into player list
+            let realm_players = self.players.entry(player.realm.to_string()).or_insert_with(|| HashMap::new());
+            realm_players.insert(player.name.to_string(), player);
+            return true;
         }
         true
     }
