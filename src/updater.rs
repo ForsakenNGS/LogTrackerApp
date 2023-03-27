@@ -21,8 +21,8 @@ use oauth2::basic::{BasicClient, BasicTokenType};
 use oauth2::reqwest::http_client;
 use graphql_client::{reqwest::post_graphql_blocking as post_graphql, GraphQLQuery};
 
-const UPDATE_INTERVAL_FAST: i64 = 86400;
-const UPDATE_INTERVAL_SLOW: i64 = 604800;
+const UPDATE_INTERVAL_FAST: i64 = 86400 * 2;    // 2 days
+const UPDATE_INTERVAL_SLOW: i64 = 604800;       // 1 week
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct UpdaterConfig {
