@@ -13,7 +13,7 @@ For clarification I will explicitly address the most critical points here:
 >
 > 1. Scrape, build databases, or otherwise create permanent copies of such content, or keep cached copies longer than permitted by the cache header;
 
-The app will only download log data for players where needed, limiting requests to players you actually encounter in game. (Mouseover/Tooltip and LFG-Tool) It will not scrape "all there is" and limits requests done as much as possible. It will only be stored partially with a limited lifespan.
+The app will only download log data for players where needed, limiting requests to players you actually encounter in game. (Mouseover/Tooltip and LFG-Tool) It will not "scrape all there is" and limits requests done as much as possible. It will only be stored partially with a limited lifespan.
 
 > 2. Present content substantially unchanged through a new channel, including but not limited to: a competing website, in-game add-ons, game overlays, social platforms, or mobile platforms;
 >
