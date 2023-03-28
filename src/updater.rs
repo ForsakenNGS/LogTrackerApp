@@ -21,6 +21,7 @@ use oauth2::basic::{BasicClient, BasicTokenType};
 use oauth2::reqwest::http_client;
 use graphql_client::{reqwest::post_graphql_blocking as post_graphql, GraphQLQuery};
 
+const UPDATE_INTERVAL_TURBO: i64 = 86400;       // 1 day
 const UPDATE_INTERVAL_FAST: i64 = 86400 * 2;    // 2 days
 const UPDATE_INTERVAL_SLOW: i64 = 604800;       // 1 week
 
@@ -50,6 +51,7 @@ pub struct UpdaterPlayer {
     faction: Box<str>,
     class: i64,
     level: i64,
+    priority: i64,
     ranking: HashMap<String, UpdaterRanking>,
     last_update: i64,
     last_update_logs: i64,
@@ -234,7 +236,7 @@ impl Updater {
         realm_players.entry(player_name.clone()).or_insert_with(|| {
             UpdaterPlayer{
                 realm: realm.as_str().into(), name: player_name.as_str().into(),
-                faction: "Unknown".into(), class: 0, level: 0,
+                faction: "Unknown".into(), class: 0, level: 0, priority: 0,
                 ranking: Default::default(),
                 last_update: 0, last_update_logs: 0, last_update_addon: 0,
                 update_priority: 0
@@ -309,10 +311,14 @@ impl Updater {
                                 let (player_name, player_details) = pair_player.unwrap();
                                 let player_updated: i64 = player_details.get("lastUpdate").unwrap();
                                 let player_updated_logs: i64 = player_details.get("lastUpdateLogs").or_else(|_| Ok::<i64, i64>(0)).unwrap();
+                                let player_priority: i64 = player_details.get("priority").or_else(|_| Ok::<i64, i64>(0)).unwrap();
+                                let player_class: i64 = player_details.get("class").or_else(|_| Ok::<i64, i64>(0)).unwrap();
+                                let player_level: i64 = player_details.get("level").or_else(|_| Ok::<i64, i64>(0)).unwrap();
                                 let mut player = &mut self.get_player(&realm_name, &player_name);
                                 player.faction = player_details.get("faction").or_else(|_| Ok::<String, String>("Unknown".to_string())).unwrap().as_str().into();
-                                player.class = player_details.get("class").unwrap();
-                                player.level = player_details.get("level").unwrap();
+                                player.class = player_class;
+                                player.level = player_level;
+                                player.priority = player_priority;
                                 player.last_update = player_updated;
                                 player.last_update_logs = player_updated_logs;
                                 player.last_update_addon = player_updated;
@@ -477,15 +483,19 @@ impl Updater {
                 let last_updated = now - player_details.last_update_logs;
                 if player_details.last_update_logs == 0 {
                     let mut queue_player = player_details.clone();
-                    queue_player.update_priority = 3;
+                    queue_player.update_priority = 4 + player_details.priority;
                     self.update_queue.push(queue_player);
-                } else if (last_seen < UPDATE_INTERVAL_FAST) && (last_updated > UPDATE_INTERVAL_FAST) {
+                } else if (last_seen < UPDATE_INTERVAL_TURBO) && (player_details.priority > 0) {
                     let mut queue_player = player_details.clone();
-                    queue_player.update_priority = 2;
+                    queue_player.update_priority = 3 + player_details.priority;
+                    self.update_queue.push(queue_player);
+                } else if (last_seen < UPDATE_INTERVAL_FAST) && ((last_updated > UPDATE_INTERVAL_FAST) || (player_details.priority > 0)) {
+                    let mut queue_player = player_details.clone();
+                    queue_player.update_priority = 2 + player_details.priority;
                     self.update_queue.push(queue_player);
                 } else if last_updated > UPDATE_INTERVAL_SLOW {
                     let mut queue_player = player_details.clone();
-                    queue_player.update_priority = 1;
+                    queue_player.update_priority = 1 + player_details.priority;
                     self.update_queue.push(queue_player);
                 }
             }
