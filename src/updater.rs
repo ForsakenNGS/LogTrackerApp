@@ -485,7 +485,7 @@ impl Updater {
                     let mut queue_player = player_details.clone();
                     queue_player.update_priority = 4 + player_details.priority;
                     self.update_queue.push(queue_player);
-                } else if (last_seen < UPDATE_INTERVAL_TURBO) && (player_details.priority > 0) {
+                } else if (last_updated > UPDATE_INTERVAL_TURBO) && (player_details.priority > 0) {
                     let mut queue_player = player_details.clone();
                     queue_player.update_priority = 3 + player_details.priority;
                     self.update_queue.push(queue_player);
@@ -628,7 +628,7 @@ impl Updater {
         if region.is_none() {
             return false;
         }
-        let zone_id = 1017;
+        let zone_id = 1017; // TODO: Obtain dynamically
         let (character, character_query) = self.query_character(
             player.name.to_string(), player.realm.to_string(), region.unwrap().to_string(), zone_id, player.class
         );
