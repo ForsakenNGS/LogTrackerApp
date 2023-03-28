@@ -479,6 +479,9 @@ impl Updater {
             let (_realm_name, player_list) = pair_realm;
             for pair_player in player_list.iter() {
                 let (_player_name, player_details) = pair_player;
+                if (player_details.level > 0) && (player_details.level < 80) {
+                    continue; // Skip non-80 players
+                }
                 let last_seen = now - player_details.last_update;
                 let last_updated = now - player_details.last_update_logs;
                 if player_details.last_update_logs == 0 {
