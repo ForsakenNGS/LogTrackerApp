@@ -1,8 +1,33 @@
 ![Banner](https://github.com/ForsakenNGS/LogTrackerApp/blob/master/doc_resources/images/banner/LogTrackerBanner.png?raw=true)
 ![GitHub all releases](https://img.shields.io/github/downloads/ForsakenNGS/LogTrackerApp/total?label=Downloads) ![GitHub issues](https://img.shields.io/github/issues-raw/ForsakenNGS/LogTrackerApp?label=Open%20Issues) ![GitHub](https://img.shields.io/github/license/ForsakenNGS/LogTrackerApp?label=License)
 
-# Disclaimer! This appliction is not officially endorsed by WarcraftLogs and the developer takes no responsibility for actions taken against your WarcraftLogs account.
-No actions have yet been reported but this applciation is in a grey area. Meaning it is technically within their guidlines but those can change or be interpreted differently.
+# Disclaimer!
+
+**This application may offend certain points of [WarcraftLogs API terms of service](https://articles.classic.warcraftlogs.com/help/rpg-logs-api-terms-of-service). Use it at your own risk!**
+
+**I will only support this way of obtaining log data until there is an official alternative provided by WarcraftLogs!**
+
+For clarification I will explicitly address the most critical points here:
+
+> Unless expressly permitted by the content owner or by applicable law, you will not, and will not permit your end users or others acting on your behalf to, do the following with content returned from the APIs:
+>
+> 1. Scrape, build databases, or otherwise create permanent copies of such content, or keep cached copies longer than permitted by the cache header;
+
+The app will only download log data for players where needed, limiting requests to players you actually encounter in game. (Mouseover/Tooltip and LFG-Tool) It will not scrape "all there is" and limits requests done as much as possible.
+
+> 2. Present content substantially unchanged through a new channel, including but not limited to: a competing website, in-game add-ons, game overlays, social platforms, or mobile platforms;
+>
+> 3. Copy, translate, modify, create a derivative work of, sell, lease, lend, convey, distribute, publicly display, or sublicense to any third party;
+
+If the according sync option (Escape > Interface > Addons > LogTracker > Send player data to other clients) is disabled, the data you obtain via the API will only be shown to yourself. If it is enabled it will to some extend "distribute and/or publicly display" the data, but reduce the amount of requests needed to obtain a helpful amount of information.
+
+Taken literally, every site using the API (incluing e.g. ironforge.pro) violates these points.
+
+> Misrepresent the source or ownership; or
+>
+> Remove, obscure, or alter any copyright, trademark, or other proprietary rights notices; or falsify or delete any author attributions, legal notices, or other labels of the origin or source of material.
+
+Upon login/zone change the Addon will clearly communicate ownership of the data and even endorse supporting WarcraftLogs.
 
 **Installation and Usage**
 ---
