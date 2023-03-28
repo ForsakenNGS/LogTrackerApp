@@ -21,7 +21,7 @@ The app will only download log data for players where needed, limiting requests 
 
 If the according sync option (Escape > Interface > Addons > LogTracker > Send player data to other clients) is disabled, the data you obtain via the API will only be shown to yourself. If it is enabled it will to some extend "distribute and/or publicly display" the data, but reduce the amount of requests needed to obtain a helpful amount of information.
 
-Taken literally, every site using the API (incluing e.g. ironforge.pro) violates these points.
+Taken literally, every site using the API (including e.g. ironforge.pro) violates these points.
 
 > Misrepresent the source or ownership; or
 >
