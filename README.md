@@ -1,5 +1,5 @@
 ![Banner](https://github.com/ForsakenNGS/LogTrackerApp/blob/master/doc_resources/images/banner/LogTrackerBanner.png?raw=true)
-![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/ForsakenNGS/LogTracker?label=Latest%20Release) ![GitHub all releases](https://img.shields.io/github/downloads/ForsakenNGS/LogTrackerApp/total?label=Downloads) ![GitHub issues](https://img.shields.io/github/issues-raw/ForsakenNGS/LogTrackerApp?label=Open%20Issues) ![GitHub](https://img.shields.io/github/license/ForsakenNGS/LogTrackerApp?label=License)
+![GitHub all releases](https://img.shields.io/github/downloads/ForsakenNGS/LogTrackerApp/total?label=Downloads) ![GitHub issues](https://img.shields.io/github/issues-raw/ForsakenNGS/LogTrackerApp?label=Open%20Issues) ![GitHub](https://img.shields.io/github/license/ForsakenNGS/LogTrackerApp?label=License)
 
 **Installation and Usage**
 ---
