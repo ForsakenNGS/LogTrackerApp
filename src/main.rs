@@ -45,6 +45,7 @@ impl LogTrackerApp {
             thread::sleep(Duration::new(1, 0));
             let mut last_rate_update = SystemTime::now() - Duration::new(30, 0);
             let mut last_export = SystemTime::now();
+            let mut last_update = SystemTime::now();
             let mut pause_until = SystemTime::now();
             loop {
                 if !updater_thread.lock().unwrap().is_active() {
@@ -57,6 +58,12 @@ impl LogTrackerApp {
                         let status_text = format!("Update completed.");
                         gui_data.lock().unwrap().status_text = status_text;
                         updater_thread.lock().unwrap().update_gui();
+                    }
+                    let last_update_secs = SystemTime::now().duration_since(last_update).unwrap().as_secs();
+                    if last_update_secs > 300 {
+                        // Finished 5 minutes ago, check for due updates again
+                        updater_thread.lock().unwrap().rewrite_update_queue();
+                        last_update = SystemTime::now();
                     }
                     thread::sleep(Duration::new(1, 0));
                     continue;
@@ -76,6 +83,7 @@ impl LogTrackerApp {
                     updater_thread.lock().unwrap().write_addon_data();
                     last_export = SystemTime::now();
                 }
+                last_update = SystemTime::now();
                 if success {
                     thread::sleep(Duration::new(0, 10000));
                 } else {
