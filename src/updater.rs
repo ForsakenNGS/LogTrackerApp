@@ -486,11 +486,11 @@ impl Updater {
                 if player_details.priority > 4 {
                     update_queue_counts.0 += 1; // Prio new
                 } else {
-                    update_queue_counts.1 += 1; // Regular new
+                    update_queue_counts.2 += 1; // Regular new
                 }
             } else {
                 if player_details.priority > 4 {
-                    update_queue_counts.2 += 1; // Prio update
+                    update_queue_counts.1 += 1; // Prio update
                 } else {
                     update_queue_counts.3 += 1; // Regular update
                 }
