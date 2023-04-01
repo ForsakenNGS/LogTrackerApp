@@ -39,6 +39,8 @@ Upon login/zone change the Addon will clearly communicate ownership of the data 
 2. Section
 	+ Here you can manually update a player if you want to. Just enter the realm and name and click the "Update" button.
 3. Section
+    + Priority / Regular
+        + This shows the number of pending updates for the regular- and priority-queue
     + Update X/X
         + This shows the current queue of player to be updated.
     + Reserving X
@@ -54,6 +56,30 @@ The addon adds players it meets in-game to a list. Then application then takes t
 Then the information is fed back to the addon.
 
 The addon then displays the information in-game. The addon also distributes this information to others with the same addon.
+
+**Group Finder usage**
+---
+The addon integrates into the group finder and will automatically prioritize updating listed players.
+You can also limit the addon to only update those + members of your guild / raid-groups with the "Only perform prioritized updates via App" option. (Escape > Interface > Addons > LogTracker)
+
+The usual workflow is the following:
+- Open the Group Finder and select the desired raid(s)
+- Wait a few seconds and `/reload` your interface
+- Wait until the priority updates in the app are done (See **Screenshot 1** below)
+- `/reload` your interface again
+- Open the Group Finder again (if you are not listed, you also have to select the raid(s) again)
+- Repeat as nescessary (As seen in **Screenshot 2** below, you can judge this by the status report within the group finder)
+
+This approach, while certainly not perfect, allows a more efficient use of the available API quota.
+Especially if your server don't have a lot of players running the app, this will be a lot more useful in the short term.
+
+ **Screenshot 1**
+
+![Update status within the app](https://github.com/ForsakenNGS/LogTrackerApp/blob/master/doc_resources/images/app/LogTrackerApp_2.PNG?raw=true)
+
+ **Screenshot 2**
+
+![Queue prediction in-game](https://github.com/ForsakenNGS/LogTrackerApp/blob/master/doc_resources/images/game/GroupFinder_1.PNG?raw=true)
 
 **WarcraftLogs API**
 ---

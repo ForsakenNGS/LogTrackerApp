@@ -195,6 +195,7 @@ pub struct Updater {
     update_addon: SystemTime,
     update_queue: Vec<UpdaterPlayer>,
     update_queue_pos: usize,
+    update_priority_only: bool,
     wcl_token: String,
     wcl_points_used: f64,
     wcl_points_limit: f64,
@@ -212,6 +213,7 @@ impl Updater {
             update_addon: SystemTime::UNIX_EPOCH,
             update_queue: Vec::new(),
             update_queue_pos: 0,
+            update_priority_only: false,
             wcl_token: Default::default(),
             wcl_points_used: Default::default(),
             wcl_points_limit: Default::default(),
@@ -323,6 +325,9 @@ impl Updater {
                                 player.last_update_logs = player_updated_logs;
                                 player.last_update_addon = player_updated;
                             }
+                        }
+                        if let Ok(update_priority_only) = data.get("appPriorityOnly") {
+                            self.update_priority_only = update_priority_only;
                         }
                     }
                 }
@@ -471,6 +476,29 @@ impl Updater {
             .expect("Failed to write player data");
     }
 
+    pub fn refresh_queue_status(&self) -> (i32, i32, i32, i32) {
+        let mut update_queue_counts = (0, 0, 0, 0);
+        let update_start = self.update_queue_pos;
+        let update_count = self.update_queue.len();
+        for update_index in update_start..update_count {
+            let player_details = self.update_queue.get(update_index).unwrap();
+            if player_details.last_update_logs == 0 {
+                if player_details.priority > 4 {
+                    update_queue_counts.0 += 1; // Prio new
+                } else {
+                    update_queue_counts.1 += 1; // Regular new
+                }
+            } else {
+                if player_details.priority > 4 {
+                    update_queue_counts.2 += 1; // Prio update
+                } else {
+                    update_queue_counts.3 += 1; // Regular update
+                }
+            }
+        }
+        update_queue_counts
+    }
+
     pub fn rewrite_update_queue(&mut self) {
         let now = i64::try_from(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()).unwrap();
         self.update_queue_pos = 0;
@@ -481,6 +509,12 @@ impl Updater {
                 let (_player_name, player_details) = pair_player;
                 if (player_details.level > 0) && (player_details.level < 80) {
                     continue; // Skip non-80 players
+                }
+                if player_details.class == 0 {
+                    continue; // Skip players with unknown class
+                }
+                if self.update_priority_only && (player_details.priority == 0) {
+                    continue; // Only update prioritized players
                 }
                 let last_seen = now - player_details.last_update;
                 let last_updated = now - player_details.last_update_logs;
@@ -586,23 +620,30 @@ impl Updater {
             let wcl_points_left = self.wcl_points_limit - self.wcl_points_used;
             let wcl_reserve_time = self.wcl_reset_at - Duration::new(300, 0);
             if (wcl_points_left < 600.0) && (SystemTime::now() < wcl_reserve_time) {
+                let (prio_new, prio_update, new, update) = self.refresh_queue_status();
                 self.modify_gui_data(false, |gui_data| {
                     let points_reserve_dt: DateTime<Local> = wcl_reserve_time.into();
                     let points_reset_dt: DateTime<Local> = self.wcl_reset_at.into();
-                    let status_text = format!("Updated {} / {} - Reserving {} points until {} (Reset at {})",
+                    let status_text = format!(
+                        "Priority: {} new, {} updates - Regular {} new, {} updates\nUpdated {} / {} - Reserving {} points until {} (Reset at {})",
+                        prio_new, prio_update, new, update,
                         self.update_queue_pos, update_count, wcl_points_left.round(), points_reserve_dt.format("%R"), points_reset_dt.format("%R")
                     );
                     info!("Status: {}", status_text);
                     gui_data.status_text = status_text;
                 });
+                self.update_gui();
                 return false;
             }
         }
         self.update_queue_pos += 1;
         let player = self.update_queue.get(update_index).unwrap();
+        let (prio_new, prio_update, new, update) = self.refresh_queue_status();
         if self.update_player(player.clone()) {
             self.modify_gui_data(false, |gui_data| {
-                let status_text = format!("Updated {} / {} ({} / {} points used)",
+                let status_text = format!(
+                    "Priority: {} new, {} updates - Regular {} new, {} updates\nUpdated {} / {} ({} / {} points used)",
+                    prio_new, prio_update, new, update,
                     self.update_queue_pos, update_count, self.wcl_points_used.round(), self.wcl_points_limit.round()
                 );
                 info!("Status: {}", status_text);
@@ -614,8 +655,15 @@ impl Updater {
             self.modify_gui_data(false, |gui_data| {
                 let points_reset_dt: DateTime<Local> = self.wcl_reset_at.into();
                 let status_text = match self.wcl_points_limit {
-                    x if x == 0.0 => format!("Rate limit reached! Reset time is unknown"),
-                    _ => format!("Rate limit reached! Reset at {}", points_reset_dt.format("%R"))
+                    x if x == 0.0 => format!(
+                        "Priority: {} new, {} updates - Regular {} new, {} updates\nRate limit reached! Reset time is unknown",
+                        prio_new, prio_update, new, update
+                    ),
+                    _ => format!(
+                        "Priority: {} new, {} updates - Regular {} new, {} updates\nRate limit reached! Reset at {}", 
+                        prio_new, prio_update, new, update,
+                        points_reset_dt.format("%R")
+                    )
                 };
                 info!("Status: {}", status_text);
                 gui_data.status_text = status_text;

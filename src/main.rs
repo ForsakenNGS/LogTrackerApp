@@ -55,7 +55,7 @@ impl LogTrackerApp {
                 updater_thread.lock().unwrap().update_addon();
                 if !updater_thread.lock().unwrap().is_update_possible() {
                     {
-                        let status_text = format!("Update completed.");
+                        let status_text = format!("\nUpdate completed.");
                         gui_data.lock().unwrap().status_text = status_text;
                         updater_thread.lock().unwrap().update_gui();
                     }
@@ -113,7 +113,7 @@ impl eframe::App for LogTrackerApp {
             }
             let panel_width = ui.available_width();
             ui.vertical(|ui| {
-                ui.set_height( ui.available_height() - 15.0 );
+                ui.set_height( ui.available_height() - 30.0 );
                 ui.label("Configuration");
                 ui.group(|ui| {
                     ui.label("Game directory");
@@ -206,8 +206,8 @@ fn main() -> Result<(), eframe::Error> {
     let icon = image::load_from_memory(ICON).unwrap().to_rgba8();
     let (icon_width, icon_height) = icon.dimensions();
     let options = eframe::NativeOptions {
-        initial_window_size: Some(egui::vec2(400.0, 300.0)),
-        min_window_size: Some(egui::vec2(400.0, 300.0)),
+        initial_window_size: Some(egui::vec2(440.0, 300.0)),
+        min_window_size: Some(egui::vec2(440.0, 300.0)),
         icon_data: Some(eframe::IconData {
             rgba: icon.into_raw(),
             width: icon_width,
