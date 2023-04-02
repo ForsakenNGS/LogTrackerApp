@@ -63,7 +63,7 @@ pub struct UpdaterPlayer {
 #[derive(Clone, Default)]
 pub struct UpdaterBaseData {
     classes: HashMap<String, UpdaterBaseDataClass>,
-    region_by_server_slug: HashMap<String, String>
+    region_by_server_name: HashMap<String, String>
 }
 
 
@@ -360,10 +360,10 @@ impl Updater {
                         base_data_spec.metric = spec_details.get("metric").unwrap();
                     }
                 }
-                let data_region_by_server_slug: Table = data.get("regionByServerSlug").unwrap();
+                let data_region_by_server_slug: Table = data.get("regionByServerName").unwrap();
                 for pair_region_by_server_slug in data_region_by_server_slug.pairs::<String, String>() {
                     let (server_slug, server_region) = pair_region_by_server_slug.unwrap();
-                    self.base_data.region_by_server_slug.insert(server_slug, server_region);
+                     self.base_data.region_by_server_name.insert(server_slug, server_region);
                 }
             }
         }
@@ -675,7 +675,8 @@ impl Updater {
 
     pub fn update_player(&mut self, mut player: UpdaterPlayer) -> bool {
         self.auth();
-        let region = self.base_data.region_by_server_slug.get(&player.realm.to_lowercase().to_string());
+        let region_name = player.realm.to_string();
+        let region = self.base_data.region_by_server_name.get(&region_name);
         if region.is_none() {
             return false;
         }
