@@ -54,12 +54,28 @@ pub struct UpdaterPlayer {
     level: i64,
     priority: i64,
     ranking: HashMap<String, UpdaterRanking>,
+    encounter: HashMap<String, Vec<UpdaterEncounter>>,
+    encounter_kills: i64,
     last_update: i64,
     last_update_logs: i64,
     last_update_addon: i64,
     update_priority: i64
 }
 
+#[derive(Clone, Default)]
+pub struct UpdaterRanking {
+    encounters: i64,
+    encounters_killed: i64,
+    allstar_ratings: Vec<(i64,i64,i64)>,
+    encounter_ratings: Vec<(i64,i64,i64)>
+}
+
+#[derive(Clone, Default)]
+pub struct UpdaterEncounter {
+    kill_count: i64,
+    hardmode_difficulty: i64,
+    hardmode_label: String,
+}
 
 #[derive(Clone, Default)]
 pub struct UpdaterBaseData {
@@ -82,14 +98,6 @@ pub struct UpdaterBaseDataClassSpec {
     name: Box<str>,
     slug: Box<str>,
     metric: Box<str>,
-}
-
-#[derive(Clone, Default)]
-pub struct UpdaterRanking {
-    encounters: i64,
-    encounters_killed: i64,
-    allstar_ratings: Vec<(i64,i64,i64)>,
-    encounter_ratings: Vec<(i64,i64,i64)>
 }
 
 impl UpdaterRanking {
@@ -240,9 +248,9 @@ impl Updater {
             UpdaterPlayer{
                 realm: realm.as_str().into(), name: player_name.as_str().into(),
                 faction: "Unknown".into(), class: 0, level: 0, priority: 0,
-                ranking: Default::default(),
                 last_update: 0, last_update_logs: 0, last_update_addon: 0,
-                update_priority: 0
+                update_priority: 0,
+                ..Default::default()
             }
         })
     }
@@ -325,6 +333,36 @@ impl Updater {
                                 player.last_update = player_updated;
                                 player.last_update_logs = player_updated_logs;
                                 player.last_update_addon = player_updated;
+                                if let Ok(player_encounters) = player_details.get::<String, Table>("encounters".to_string()) {
+                                    let mut encounter_kills: i64 = 0;
+                                    for pair_encounter in player_encounters.pairs::<String, String>() {
+                                        let (zone_id, encounter_details_str) = pair_encounter.unwrap();
+                                        let mut zone_kills: i64 = 0;
+                                        let mut encounter_details: Vec<UpdaterEncounter> = Vec::new();
+                                        for encounter_data in encounter_details_str.split("/") {
+                                            let mut encounter_entry = UpdaterEncounter{ ..Default::default() };
+                                            if !encounter_data.is_empty() {
+                                                let mut encounter_data_fields = encounter_data.split(",");
+                                                if let Some(kill_count) = encounter_data_fields.next() {
+                                                    encounter_entry.kill_count = str::parse(kill_count).unwrap();
+                                                    if encounter_entry.kill_count > 0 {
+                                                        zone_kills += 1;
+                                                    }
+                                                }
+                                                if let Some(hardmode_difficulty) = encounter_data_fields.next() {
+                                                    encounter_entry.hardmode_difficulty = str::parse(hardmode_difficulty).unwrap();
+                                                }
+                                                if let Some(hardmode_label) = encounter_data_fields.next() {
+                                                    encounter_entry.hardmode_label = hardmode_label.to_string();
+                                                }
+                                            }
+                                            encounter_details.push(encounter_entry);
+                                        }
+                                        encounter_kills = encounter_kills.max(zone_kills);
+                                        player.encounter.insert(zone_id.to_string(), encounter_details);
+                                    }
+                                    player.encounter_kills = encounter_kills;
+                                }
                             }
                         }
                         if let Ok(update_priority_only) = data.get("appPriorityOnly") {
@@ -517,6 +555,9 @@ impl Updater {
                 }
                 if self.update_priority_only && (player_details.priority == 0) {
                     continue; // Only update prioritized players
+                }
+                if !player_details.encounter.is_empty() && (player_details.encounter_kills == 0) && (player_details.priority == 0) {
+                    continue; // Skip players which are known to have no progress
                 }
                 let last_seen = now - player_details.last_update;
                 let last_updated = now - player_details.last_update_logs;
