@@ -161,8 +161,15 @@ impl eframe::App for LogTrackerApp {
                         let input_width = (panel_width - 95.0) / 2.0;
                         ui.vertical(|ui| {
                             ui.set_width(input_width);
-                            let label_manual_realm = ui.label("Realm");
-                            ui.text_edit_singleline(&mut gui_data.manual_realm).labelled_by(label_manual_realm.id);
+                            ui.label("Realm");
+                            egui::ComboBox::new("manual_realm", "")
+                                .width(input_width)
+                                .selected_text(&gui_data.manual_realm)
+                                .show_ui(ui, |ui| {
+                                    for realm in gui_data.realm_list.clone().iter() {
+                                        ui.selectable_value(&mut gui_data.manual_realm, realm.clone(), realm.clone());
+                                    }
+                                });
                         });
                         ui.vertical(|ui| {
                             ui.set_width(input_width);

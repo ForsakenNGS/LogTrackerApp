@@ -41,7 +41,8 @@ pub struct UpdaterGuiData {
     pub manual_realm: String,
     pub manual_player: String,
     pub manual_result: String,
-    pub status_text: String
+    pub status_text: String,
+    pub realm_list: Vec<String>
 }
 
 #[derive(Clone, Default)]
@@ -279,7 +280,7 @@ impl Updater {
     }
 
     pub fn read_addon_data(&mut self) {
-        let mut realm_first: Option<String> = None;
+        let mut realm_list: Vec<String> = Vec::new();
         let game_dir_str = String::from(self.config.game_dir.clone());
         let game_dir = PathBuf::from(game_dir_str);
         let mut game_wtf_accounts = PathBuf::from(game_dir.clone());
@@ -306,8 +307,8 @@ impl Updater {
                         let data_realms: Table = data.get("playerData").unwrap();
                         for pair_realm in data_realms.pairs::<String, Table>() {
                             let (realm_name, player_list) = pair_realm.unwrap();
-                            if realm_first.is_none() {
-                                realm_first = Some(realm_name.clone());
+                            if !realm_list.contains(&realm_name) {
+                                realm_list.push(realm_name.clone());
                             }
                             for pair_player in player_list.pairs::<String, Table>() {
                                 let (player_name, player_details) = pair_player.unwrap();
@@ -379,8 +380,8 @@ impl Updater {
                 let data: Table = lua.globals().get("LogTracker_AppData").unwrap();
                 for pair_realm in data.pairs::<String, Table>() {
                     let (realm_name, player_list) = pair_realm.unwrap();
-                    if realm_first.is_none() {
-                        realm_first = Some(realm_name.clone());
+                    if !realm_list.contains(&realm_name) {
+                        realm_list.push(realm_name.clone());
                     }
                     for pair_player in player_list.pairs::<String, Table>() {
                         let (player_name, player_details) = pair_player.unwrap();
@@ -405,10 +406,11 @@ impl Updater {
             }
         }
         self.modify_gui_data(true, |gui_data| {
-            if let Some(realm_name) = realm_first {
+            if realm_list.len() > 0 {
+                gui_data.realm_list = realm_list;
                 let gui_manual_realm = &mut gui_data.manual_realm;
                 if gui_manual_realm.is_empty() {
-                    *gui_manual_realm = realm_name.clone();
+                    *gui_manual_realm = gui_data.realm_list.first().unwrap().clone();
                 }
             }
         });
